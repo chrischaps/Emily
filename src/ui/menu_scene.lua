@@ -51,4 +51,4 @@ function menu_scene:draw()
     love.graphics.print("Up/Down to select, Enter to play, Esc to quit", 60, y + 20)
 end
 
-return setmetatable(menu_scene, menu_scene)
+return menu_scene

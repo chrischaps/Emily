@@ -24,6 +24,18 @@ local microgames = {
             local weight = require("src.microgames.weight.init")
             return weight.new()
         end
+    },
+    {
+        id = "fog",
+        name = "Fog",
+        emlId = "EML-02",
+        emotions = {"confusion", "anxiety", "distrust", "disorientation"},
+        description = "Navigate through subtle disorientation as controls and perception drift.",
+        expectedDuration = "2-4 min",
+        create = function()
+            local fog = require("src.microgames.fog.init")
+            return fog.new()
+        end
     }
 }
 
