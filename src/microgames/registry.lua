@@ -36,6 +36,18 @@ local microgames = {
             local fog = require("src.microgames.fog.init")
             return fog.new()
         end
+    },
+    {
+        id = "fog_anchors",
+        name = "Fog (Anchors)",
+        emlId = "EML-02b",
+        emotions = {"confusion", "anxiety", "uncertainty", "hope", "betrayal"},
+        description = "Seek anchors to orient yourself. But anchors may not always help.",
+        expectedDuration = "2-4 min",
+        create = function()
+            local fog_anchors = require("src.microgames.fog_anchors.init")
+            return fog_anchors.new()
+        end
     }
 }
 
