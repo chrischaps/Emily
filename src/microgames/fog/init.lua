@@ -1,4 +1,7 @@
 local MicroGameBase = require("src.core.microgame_base")
+local audio = require("src.core.audio")
+local music = require("src.core.music")
+local input = require("src.core.input")
 
 local Fog = setmetatable({}, { __index = MicroGameBase })
 Fog.__index = Fog
@@ -127,6 +130,8 @@ end
 
 function Fog:start()
     self.time = 0
+    audio.init()
+    music.play("fog")
 end
 
 function Fog:getRemappedDirection(dir)
@@ -137,12 +142,8 @@ function Fog:getRemappedDirection(dir)
 end
 
 function Fog:processInput()
-    local rawInput = { x = 0, y = 0 }
-
-    if love.keyboard.isDown("up", "w") then rawInput.y = rawInput.y - 1 end
-    if love.keyboard.isDown("down", "s") then rawInput.y = rawInput.y + 1 end
-    if love.keyboard.isDown("left", "a") then rawInput.x = rawInput.x - 1 end
-    if love.keyboard.isDown("right", "d") then rawInput.x = rawInput.x + 1 end
+    local moveX, moveY = input.getMovement()
+    local rawInput = { x = moveX, y = moveY }
 
     -- Apply directional remapping based on disorientation
     local mappedInput = { x = 0, y = 0 }
@@ -419,6 +420,8 @@ function Fog:updateEndCondition(dt, isMoving)
         endState.stillTimer = endState.stillTimer + dt
         if endState.stillTimer >= 4 then
             endState.fading = true
+            audio.play("ending", 0.3)
+            music.fadeOut(2.0)
         end
     else
         endState.stillTimer = 0
@@ -475,10 +478,14 @@ function Fog:update(dt)
 
     -- Check end condition
     self:updateEndCondition(dt, isMoving)
+
+    -- Update music and modulate based on disorientation
+    music.update(dt)
+    music.modulate(self.disorientation.value)
 end
 
 function Fog:draw()
-    love.graphics.clear(0.08, 0.08, 0.1)
+    -- Background cleared by microgame_scene
 
     local dis = self.disorientation.value
 
@@ -552,7 +559,7 @@ function Fog:draw()
     -- Minimal UI (no disorientation indicator shown to player)
     love.graphics.setFont(self.smallFont)
     love.graphics.setColor(0.4, 0.4, 0.45)
-    love.graphics.print("WASD or Arrow keys to move", 20, 510)
+    love.graphics.print("WASD or Arrow keys to move", 20, 490)
 end
 
 function Fog:drawVignette(alpha)

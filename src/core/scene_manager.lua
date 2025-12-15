@@ -29,4 +29,8 @@ function scene_manager.mousepressed(x, y, button, istouch, presses)
     safe_call(scene_manager.current, "mousepressed", x, y, button, istouch, presses)
 end
 
+function scene_manager.gamepadpressed(joystick, button)
+    safe_call(scene_manager.current, "gamepadpressed", joystick, button)
+end
+
 return scene_manager

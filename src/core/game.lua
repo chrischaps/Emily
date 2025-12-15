@@ -22,4 +22,8 @@ function game.mousepressed(x, y, button, istouch, presses)
     scene_manager.mousepressed(x, y, button, istouch, presses)
 end
 
+function game.gamepadpressed(joystick, button)
+    scene_manager.gamepadpressed(joystick, button)
+end
+
 return game

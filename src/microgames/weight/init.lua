@@ -1,4 +1,5 @@
 local MicroGameBase = require("src.core.microgame_base")
+local input = require("src.core.input")
 
 local Weight = setmetatable({}, { __index = MicroGameBase })
 Weight.__index = Weight
@@ -167,12 +168,8 @@ function Weight:updatePlayer(dt)
     local speedMult = 1 - (burden * burden * 0.7)
     local effectiveSpeed = self.player.baseSpeed * speedMult
 
-    -- Get raw input
-    local rawX, rawY = 0, 0
-    if love.keyboard.isDown("up", "w") then rawY = rawY - 1 end
-    if love.keyboard.isDown("down", "s") then rawY = rawY + 1 end
-    if love.keyboard.isDown("left", "a") then rawX = rawX - 1 end
-    if love.keyboard.isDown("right", "d") then rawX = rawX + 1 end
+    -- Get raw input (supports gamepad)
+    local rawX, rawY = input.getMovement()
 
     local moveX, moveY = rawX, rawY
 
@@ -395,7 +392,7 @@ function Weight:draw()
     local burden = math.min(1.0, self.burden.value)
 
     -- Clear with dark background
-    love.graphics.clear(0.05, 0.05, 0.08)
+    -- Background cleared by microgame_scene
 
     -- Draw cleansing zones
     love.graphics.setColor(0.2, 0.5, 0.3, 0.4)

@@ -1,4 +1,7 @@
 local MicroGameBase = require("src.core.microgame_base")
+local audio = require("src.core.audio")
+local music = require("src.core.music")
+local input = require("src.core.input")
 
 local FogAnchors = setmetatable({}, { __index = MicroGameBase })
 FogAnchors.__index = FogAnchors
@@ -147,6 +150,8 @@ end
 
 function FogAnchors:start()
     self.time = 0
+    audio.init()
+    music.play("fog")
 end
 
 -- Get anchor state based on global disorientation level
@@ -177,12 +182,8 @@ function FogAnchors:getRemappedDirection(dir)
 end
 
 function FogAnchors:processInput()
-    local rawInput = { x = 0, y = 0 }
-
-    if love.keyboard.isDown("up", "w") then rawInput.y = rawInput.y - 1 end
-    if love.keyboard.isDown("down", "s") then rawInput.y = rawInput.y + 1 end
-    if love.keyboard.isDown("left", "a") then rawInput.x = rawInput.x - 1 end
-    if love.keyboard.isDown("right", "d") then rawInput.x = rawInput.x + 1 end
+    local moveX, moveY = input.getMovement()
+    local rawInput = { x = moveX, y = moveY }
 
     -- Skip remapping if stabilized
     if self.stabilization.active and self.stabilization.strength > 0.5 then
@@ -479,6 +480,9 @@ function FogAnchors:activateAnchor(anchor)
         -- Reduce disorientation
         self.disorientation.value = math.max(0, self.disorientation.value - 0.08)
 
+        -- Audio: calming stabilization tone
+        audio.play("stabilize", 0.4)
+
     elseif state == "degraded" then
         -- Partial stabilization
         self.stabilization.active = true
@@ -492,6 +496,9 @@ function FogAnchors:activateAnchor(anchor)
 
         -- Smaller disorientation reduction
         self.disorientation.value = math.max(0, self.disorientation.value - 0.03)
+
+        -- Audio: partial/uncertain tone
+        audio.play("partial", 0.3)
 
     elseif state == "corrupted" then
         -- False stabilization - betrayal
@@ -508,6 +515,9 @@ function FogAnchors:activateAnchor(anchor)
 
         -- Slightly INCREASE disorientation
         self.disorientation.value = math.min(1, self.disorientation.value + 0.02)
+
+        -- Audio: dissonant destabilization tone
+        audio.play("destabilize", 0.35)
 
         -- May trigger wrong axis remap
         if math.random() < 0.4 then
@@ -543,6 +553,8 @@ function FogAnchors:updateEndCondition(dt, isMoving)
             endState.stillTimer = endState.stillTimer + dt
             if endState.stillTimer >= 4 then
                 endState.fading = true
+                audio.play("ending", 0.3)
+                music.fadeOut(2.0)
             end
         else
             endState.stillTimer = math.max(0, endState.stillTimer - dt * 0.5)
@@ -591,10 +603,14 @@ function FogAnchors:update(dt)
     self:updateAnchors(dt)
     self:updateCamera(dt)
     self:updateEndCondition(dt, isMoving)
+
+    -- Update music and modulate based on disorientation
+    music.update(dt)
+    music.modulate(self.disorientation.value)
 end
 
 function FogAnchors:draw()
-    love.graphics.clear(0.08, 0.08, 0.1)
+    -- Background cleared by microgame_scene
 
     local dis = self.disorientation.value
 
@@ -697,7 +713,7 @@ function FogAnchors:draw()
     -- Minimal UI
     love.graphics.setFont(self.smallFont)
     love.graphics.setColor(0.4, 0.4, 0.45)
-    love.graphics.print("WASD to move. Seek the anchors.", 20, 510)
+    love.graphics.print("WASD to move. Seek the anchors.", 20, 490)
 end
 
 function FogAnchors:drawVignette(alpha)

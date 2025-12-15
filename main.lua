@@ -19,3 +19,7 @@ end
 function love.mousepressed(x, y, button, istouch, presses)
     if game.mousepressed then game.mousepressed(x, y, button, istouch, presses) end
 end
+
+function love.gamepadpressed(joystick, button)
+    if game.gamepadpressed then game.gamepadpressed(joystick, button) end
+end

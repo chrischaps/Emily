@@ -1,4 +1,5 @@
 local MicroGameBase = require("src.core.microgame_base")
+local input = require("src.core.input")
 
 local Carry = setmetatable({}, { __index = MicroGameBase })
 Carry.__index = Carry
@@ -21,6 +22,10 @@ function Carry.new()
     self.dropoff = { x = 760, y = 270, r = 24 }
     self.font = love.graphics.newFont(16)
 
+    -- Track zone presence to only pickup/dropoff once per visit
+    self.atWell = false
+    self.atDropoff = false
+
     return self
 end
 
@@ -36,31 +41,40 @@ function Carry:update(dt)
     local burdenFactor = 1 - (self.bucketsCarried / (self.maxBuckets + 1))
     local currentSpeed = self.player.speed * burdenFactor
 
-    local moveX, moveY = 0, 0
-    if love.keyboard.isDown("up", "w") then moveY = moveY - 1 end
-    if love.keyboard.isDown("down", "s") then moveY = moveY + 1 end
-    if love.keyboard.isDown("left", "a") then moveX = moveX - 1 end
-    if love.keyboard.isDown("right", "d") then moveX = moveX + 1 end
+    -- Expose speed factor for footstep audio integration
+    self.speedFactor = burdenFactor
 
-    if moveX ~= 0 or moveY ~= 0 then
-        local len = math.sqrt(moveX*moveX + moveY*moveY)
-        moveX, moveY = moveX / len, moveY / len
-        self.player.x = self.player.x + moveX * currentSpeed * dt
-        self.player.y = self.player.y + moveY * currentSpeed * dt
+    local moveX, moveY = input.getMovement()
+    local inputMagnitude = math.sqrt(moveX * moveX + moveY * moveY)
+
+    if inputMagnitude > 0 then
+        -- Normalize direction and apply speed (analog magnitude affects speed)
+        local dirX, dirY = moveX / inputMagnitude, moveY / inputMagnitude
+        local effectiveSpeed = currentSpeed * inputMagnitude
+        self.player.x = self.player.x + dirX * effectiveSpeed * dt
+        self.player.y = self.player.y + dirY * effectiveSpeed * dt
+
+        -- Update speed factor for footsteps (burden * input magnitude)
+        self.speedFactor = burdenFactor * inputMagnitude
     end
 
-    if dist(self.player.x, self.player.y, self.well.x, self.well.y) < self.well.r + 10 then
+    -- Check well zone - pick up one bucket when entering
+    local nearWell = dist(self.player.x, self.player.y, self.well.x, self.well.y) < self.well.r + 10
+    if nearWell and not self.atWell then
         self.bucketsCarried = math.min(self.maxBuckets, self.bucketsCarried + 1)
     end
+    self.atWell = nearWell
 
-    if dist(self.player.x, self.player.y, self.dropoff.x, self.dropoff.y) < self.dropoff.r + 10
-        and self.bucketsCarried > 0 then
+    -- Check dropoff zone - drop one bucket when entering
+    local nearDropoff = dist(self.player.x, self.player.y, self.dropoff.x, self.dropoff.y) < self.dropoff.r + 10
+    if nearDropoff and not self.atDropoff and self.bucketsCarried > 0 then
         self.bucketsCarried = self.bucketsCarried - 1
     end
+    self.atDropoff = nearDropoff
 end
 
 function Carry:draw()
-    love.graphics.clear(0.05, 0.05, 0.08)
+    -- Background cleared by microgame_scene
     love.graphics.setFont(self.font)
 
     love.graphics.setColor(0.2, 0.4, 0.9)

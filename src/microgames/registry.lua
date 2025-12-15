@@ -48,6 +48,30 @@ local microgames = {
             local fog_anchors = require("src.microgames.fog_anchors.init")
             return fog_anchors.new()
         end
+    },
+    {
+        id = "fog_exit",
+        name = "Fog (Exit)",
+        emlId = "EML-02c",
+        emotions = {"frustration", "doubt", "confusion", "resignation", "absurdity"},
+        description = "Reach the exit. The goal is clear. The validation is not.",
+        expectedDuration = "2-4 min",
+        create = function()
+            local fog_exit = require("src.microgames.fog_exit.init")
+            return fog_exit.new()
+        end
+    },
+    {
+        id = "hold",
+        name = "Hold",
+        emlId = "EML-05",
+        emotions = {"closeness", "trust", "vulnerability", "patience", "attunement"},
+        description = "Explore intimacy through attentive presence and restraint.",
+        expectedDuration = "2-4 min",
+        create = function()
+            local hold = require("src.microgames.hold.init")
+            return hold.new()
+        end
     }
 }
 
