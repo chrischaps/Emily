@@ -2,6 +2,8 @@ local MicroGameBase = require("src.core.microgame_base")
 local audio = require("src.core.audio")
 local input = require("src.core.input")
 local heartbeat_music = require("src.microgames.hold.heartbeat_music")
+local visual_effects = require("src.core.visual_effects")
+local slide_sfx = require("src.core.slide_sfx")
 
 local Hold = setmetatable({}, { __index = MicroGameBase })
 Hold.__index = Hold
@@ -99,6 +101,7 @@ function Hold.new()
     self.glowIntensity = 0
     self.warmth = 0
     self.syncPulse = 0
+    self.lastOtherState = "guarded"  -- For tracking state changes
 
     -- Audio state
     self.lastToneTime = 0
@@ -110,6 +113,11 @@ end
 function Hold:start()
     audio.init()
     heartbeat_music.init()
+    visual_effects.init("intimacy")
+    slide_sfx.init()
+
+    -- Disable footsteps for this microgame (uses slide_sfx instead)
+    self.useSlideInsteadOfFootsteps = true
 end
 
 local function dist(x1, y1, x2, y2)
@@ -146,6 +154,41 @@ function Hold:update(dt)
 
     -- Update heartbeat music based on Other's state
     heartbeat_music.update(dt, self.other.state, self.intimacy.value)
+
+    -- Update slide sounds based on movement
+    local playerSpeed = math.sqrt(self.player.vx^2 + self.player.vy^2)
+    local otherSpeed = self.other.currentSpeed or 0
+    local distance = dist(self.player.x, self.player.y, self.other.x, self.other.y)
+    slide_sfx.update(dt, playerSpeed, self.player.maxSpeed, otherSpeed, distance)
+
+    -- Check for state changes and trigger visual effects
+    if self.other.state ~= self.lastOtherState then
+        visual_effects.triggerStateChange(self.other.state, self.lastOtherState)
+
+        -- Spawn burst particles on positive state changes
+        if self.other.state == "open" then
+            visual_effects.spawnBurst(self.other.x, self.other.y, 12, {0.7, 0.85, 0.7})
+        elseif self.other.state == "attuning" and self.lastOtherState == "guarded" then
+            visual_effects.spawnBurst(self.other.x, self.other.y, 8, {0.6, 0.7, 0.85})
+        end
+
+        self.lastOtherState = self.other.state
+    end
+
+    -- Update visual effects
+    visual_effects.update(dt, {
+        intensity = self.intimacy.value,
+        warmth = self.warmth,
+        entities = {
+            player = { x = self.player.x, y = self.player.y, color = {0.9, 0.9, 0.95} },
+            other = { x = self.other.x, y = self.other.y, color = {0.5, 0.6, 0.8} },
+        },
+        connection = {
+            x1 = self.player.x, y1 = self.player.y,
+            x2 = self.other.x, y2 = self.other.y,
+            strength = self.intimacy.value,
+        },
+    })
 
     -- Check end conditions
     self:checkEndConditions()
@@ -627,6 +670,9 @@ function Hold:updateOther(dt)
         end
     end
 
+    -- Track position before movement for speed calculation
+    local prevX, prevY = o.x, o.y
+
     -- Smooth movement toward target
     o.x = lerp(o.x, o.targetX, dt * 2)
     o.y = lerp(o.y, o.targetY, dt * 2)
@@ -634,6 +680,10 @@ function Hold:updateOther(dt)
     -- Clamp to screen
     o.x = math.max(40, math.min(920, o.x))
     o.y = math.max(40, math.min(500, o.y))
+
+    -- Calculate current speed for slide sound
+    local dx, dy = o.x - prevX, o.y - prevY
+    o.currentSpeed = math.sqrt(dx * dx + dy * dy) / dt
 end
 
 function Hold:updateIntimacy(dt)
@@ -810,9 +860,11 @@ function Hold:checkEndConditions()
 end
 
 function Hold:updateEnding(dt)
-    -- Stop music on first frame of ending
+    -- Stop music and reset effects on first frame of ending
     if self.endingTimer == 0 then
         heartbeat_music.stop()
+        slide_sfx.stop()
+        visual_effects.reset()
     end
 
     self.endingTimer = self.endingTimer + dt
@@ -821,6 +873,8 @@ function Hold:updateEnding(dt)
     if self.endingTimer > 5 then
         self.finished = true
         heartbeat_music.reset()
+        slide_sfx.reset()
+        visual_effects.cleanup()
     end
 end
 
@@ -831,18 +885,46 @@ end
 function Hold:draw()
     local screenW, screenH = 960, 540
 
+    -- Get screen shake offset
+    local shakeX, shakeY = visual_effects.getScreenOffset()
+
+    -- Apply screen shake via transform
+    love.graphics.push()
+    love.graphics.translate(shakeX, shakeY)
+
+    -- Draw background with breathing effect
+    visual_effects.drawBackground(self.intimacy.value, self.warmth)
+
+    -- Draw ambient particles (behind everything)
+    visual_effects.drawAmbientParticles()
+
+    -- Draw trail particles
+    visual_effects.drawTrailParticles(self.warmth)
+
     -- Draw connection glow between player and Other
     if self.glowIntensity > 0.05 then
         self:drawConnectionGlow()
     end
 
-    -- Draw the Other
+    -- Draw connection particles
+    visual_effects.drawConnectionParticles(self.warmth)
+
+    -- Draw burst particles
+    visual_effects.drawBurstParticles()
+
+    -- Draw the Other (with enhanced glow)
     self:drawOther()
 
-    -- Draw player
+    -- Draw player (with enhanced glow)
     self:drawPlayer()
 
-    -- Draw ending overlay
+    -- Draw vignette overlay
+    visual_effects.drawVignette()
+
+    -- End screen shake transform
+    love.graphics.pop()
+
+    -- Draw ending overlay (not affected by shake)
     if self.ending then
         self:drawEnding()
     end
@@ -852,9 +934,9 @@ function Hold:draw()
         local alpha = self.gameTime < 5 and 0.5 or 0.5 * (1 - (self.gameTime - 5) / 3)
         love.graphics.setColor(1, 1, 1, alpha)
         if self.gameTime < 4 then
-            love.graphics.print("Approach gently.", 20, 490)
+            love.graphics.print("Approach gently.", 20, 510)
         else
-            love.graphics.print("Lead and follow.", 20, 490)
+            love.graphics.print("Lead and follow.", 20, 510)
         end
     end
 end
@@ -863,26 +945,48 @@ function Hold:drawConnectionGlow()
     local px, py = self.player.x, self.player.y
     local ox, oy = self.other.x, self.other.y
 
-    -- Draw soft glow along connection line
-    local steps = 20
+    -- Calculate connection properties
+    local dx, dy = ox - px, oy - py
+    local dist = math.sqrt(dx * dx + dy * dy)
+    if dist < 1 then return end
+
+    -- Perpendicular offset for wave effect
+    local perpX, perpY = -dy / dist, dx / dist
+
+    -- Draw soft glow along connection line with wave
+    local steps = 25
     for i = 0, steps do
         local t = i / steps
-        local x = lerp(px, ox, t)
-        local y = lerp(py, oy, t)
 
-        -- Pulse effect
-        local pulse = 0.7 + 0.3 * math.sin(self.syncPulse * 2 + t * math.pi)
+        -- Wave offset perpendicular to connection line
+        local wavePhase = self.syncPulse * 2 + t * math.pi * 2
+        local waveAmp = 5 + self.intimacy.value * 10
+        local wave = math.sin(wavePhase) * waveAmp * (1 - math.abs(t - 0.5) * 2)
+
+        local x = lerp(px, ox, t) + perpX * wave
+        local y = lerp(py, oy, t) + perpY * wave
+
+        -- Pulse effect - travels along the connection
+        local pulse = 0.6 + 0.4 * math.sin(self.syncPulse * 3 - t * math.pi * 2)
 
         -- Color shifts warm with intimacy
-        local r = 0.4 + self.warmth * 0.4
-        local g = 0.5 + self.warmth * 0.2
-        local b = 0.7 - self.warmth * 0.3
+        local r = 0.45 + self.warmth * 0.35
+        local g = 0.55 + self.warmth * 0.15
+        local b = 0.75 - self.warmth * 0.25
 
-        local size = 15 + self.glowIntensity * 20 * pulse
-        local alpha = self.glowIntensity * 0.15 * pulse
+        -- Size tapers at ends
+        local taper = 1 - math.abs(t - 0.5) * 1.5
+        taper = math.max(0.3, taper)
+
+        local size = (12 + self.glowIntensity * 18) * pulse * taper
+        local alpha = self.glowIntensity * 0.12 * pulse * taper
 
         love.graphics.setColor(r, g, b, alpha)
         love.graphics.circle("fill", x, y, size)
+
+        -- Inner brighter core
+        love.graphics.setColor(r + 0.1, g + 0.1, b, alpha * 0.6)
+        love.graphics.circle("fill", x, y, size * 0.5)
     end
 end
 
@@ -908,54 +1012,96 @@ function Hold:drawOther()
 
         -- Subtle pulsing indicator at invitation target
         local invPulse = 0.5 + 0.5 * math.sin(o.pulsePhase * 3)
-        love.graphics.setColor(r, g, b, 0.1 * invPulse)
-        love.graphics.circle("fill", invX, invY, 25 * invPulse)
+        love.graphics.setColor(r, g, b, 0.12 * invPulse)
+        love.graphics.circle("fill", invX, invY, 30 * invPulse)
+        love.graphics.setColor(r, g, b, 0.06 * invPulse)
+        love.graphics.circle("fill", invX, invY, 45 * invPulse)
 
         -- Faint trail from Other toward invitation
-        local steps = 5
+        local steps = 6
         for i = 1, steps do
             local t = i / (steps + 1)
             local trailX = lerp(o.x, invX, t)
             local trailY = lerp(o.y, invY, t)
-            local trailAlpha = 0.05 * (1 - t) * invPulse
+            local trailAlpha = 0.08 * (1 - t) * invPulse
             love.graphics.setColor(r, g, b, trailAlpha)
-            love.graphics.circle("fill", trailX, trailY, 8 * (1 - t * 0.5))
+            love.graphics.circle("fill", trailX, trailY, 10 * (1 - t * 0.5))
         end
     end
 
-    -- Outer glow
-    local glowSize = 35 + self.glowIntensity * 15
-    love.graphics.setColor(r, g, b, 0.1 + self.glowIntensity * 0.1)
+    -- Enhanced multi-layer glow
+    local glowIntensity = 0.3 + self.glowIntensity * 0.7
+    visual_effects.drawEntityGlow(o.x, o.y, 35 * pulse, r, g, b, glowIntensity)
+
+    -- Outer glow ring
+    local glowSize = 35 + self.glowIntensity * 20
+    love.graphics.setColor(r, g, b, 0.08 + self.glowIntensity * 0.08)
     love.graphics.circle("fill", o.x, o.y, glowSize * pulse)
+
+    -- Secondary glow layer
+    love.graphics.setColor(r * 0.8, g * 0.9, b, 0.15 + self.glowIntensity * 0.1)
+    love.graphics.circle("fill", o.x, o.y, 25 * pulse)
 
     -- Inner shape
     local size = 18 * pulse
-    love.graphics.setColor(r, g, b, 0.8)
+    love.graphics.setColor(r, g, b, 0.85)
     love.graphics.circle("fill", o.x, o.y, size)
 
+    -- Highlight
+    love.graphics.setColor(r + 0.2, g + 0.15, b + 0.1, 0.4)
+    love.graphics.circle("fill", o.x - size * 0.25, o.y - size * 0.25, size * 0.35)
+
     -- Core
-    love.graphics.setColor(1, 1, 1, 0.3 + self.intimacy.value * 0.3)
+    love.graphics.setColor(1, 1, 1, 0.35 + self.intimacy.value * 0.35)
     love.graphics.circle("fill", o.x, o.y, size * 0.4)
+
+    -- Inner core sparkle
+    local sparkle = 0.5 + 0.5 * math.sin(o.pulsePhase * 5)
+    love.graphics.setColor(1, 1, 1, 0.2 * sparkle * self.intimacy.value)
+    love.graphics.circle("fill", o.x, o.y, size * 0.2)
 end
 
 function Hold:drawPlayer()
     local p = self.player
     local pulse = 0.95 + 0.05 * math.sin(self.syncPulse * 2)
 
-    -- Outer glow (syncs with Other at high intimacy)
-    if self.intimacy.value > 0.3 then
-        local glowAlpha = (self.intimacy.value - 0.3) * 0.15
-        love.graphics.setColor(0.6 + self.warmth * 0.2, 0.65, 0.75 - self.warmth * 0.1, glowAlpha)
-        love.graphics.circle("fill", p.x, p.y, 30 * pulse)
+    -- Enhanced glow (syncs with Other at high intimacy)
+    local r, g, b = 0.75 + self.warmth * 0.15, 0.8, 0.9 - self.warmth * 0.1
+
+    if self.intimacy.value > 0.2 then
+        local glowIntensity = (self.intimacy.value - 0.2) * 0.8
+        visual_effects.drawEntityGlow(p.x, p.y, 25 * pulse, r, g, b, glowIntensity)
     end
 
+    -- Outer glow ring
+    if self.intimacy.value > 0.3 then
+        local glowAlpha = (self.intimacy.value - 0.3) * 0.12
+        love.graphics.setColor(r, g, b, glowAlpha)
+        love.graphics.circle("fill", p.x, p.y, 35 * pulse)
+        love.graphics.setColor(r, g, b, glowAlpha * 0.5)
+        love.graphics.circle("fill", p.x, p.y, 45 * pulse)
+    end
+
+    -- Secondary glow
+    love.graphics.setColor(0.85, 0.88, 0.95, 0.15)
+    love.graphics.circle("fill", p.x, p.y, 18 * pulse)
+
     -- Player shape
-    love.graphics.setColor(0.9, 0.9, 0.95, 0.9)
+    love.graphics.setColor(0.92, 0.93, 0.97, 0.95)
     love.graphics.circle("fill", p.x, p.y, 12)
 
-    -- Inner core
+    -- Highlight
     love.graphics.setColor(1, 1, 1, 0.5)
+    love.graphics.circle("fill", p.x - 3, p.y - 3, 4)
+
+    -- Inner core
+    love.graphics.setColor(1, 1, 1, 0.6)
     love.graphics.circle("fill", p.x, p.y, 5)
+
+    -- Core sparkle
+    local sparkle = 0.5 + 0.5 * math.sin(self.syncPulse * 4)
+    love.graphics.setColor(1, 1, 1, 0.3 * sparkle)
+    love.graphics.circle("fill", p.x, p.y, 3)
 end
 
 function Hold:drawEnding()
@@ -1021,6 +1167,12 @@ function Hold:getDebugInfo()
         { section = "Music" },
         { key = "BPM", value = heartbeat_music.getCurrentBPM() },
         { bar = "Warmth", value = heartbeat_music.getWarmth(), color = {0.8, 0.5, 0.3} },
+
+        { section = "Slide SFX" },
+        { bar = "Player Vol", value = slide_sfx.getDebugInfo().playerVol, color = {0.5, 0.7, 0.9} },
+        { key = "Player Pitch", value = string.format("%.2f", slide_sfx.getDebugInfo().playerPitch) },
+        { bar = "Other Vol", value = slide_sfx.getDebugInfo().otherVol, color = {0.6, 0.5, 0.8} },
+        { key = "Other Pitch", value = string.format("%.2f", slide_sfx.getDebugInfo().otherPitch) },
 
         { section = "Game" },
         { key = "Time", value = self.gameTime },

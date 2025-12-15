@@ -2,6 +2,7 @@ local MicroGameBase = require("src.core.microgame_base")
 local audio = require("src.core.audio")
 local music = require("src.core.music")
 local input = require("src.core.input")
+local visual_effects = require("src.core.visual_effects")
 
 local Fog = setmetatable({}, { __index = MicroGameBase })
 Fog.__index = Fog
@@ -132,6 +133,7 @@ function Fog:start()
     self.time = 0
     audio.init()
     music.play("fog")
+    visual_effects.init("confusion")
 end
 
 function Fog:getRemappedDirection(dir)
@@ -482,12 +484,23 @@ function Fog:update(dt)
     -- Update music and modulate based on disorientation
     music.update(dt)
     music.modulate(self.disorientation.value)
+
+    -- Update visual effects
+    visual_effects.update(dt, {
+        intensity = self.disorientation.value,
+        warmth = 0,
+        entities = {
+            player = { x = self.player.x, y = self.player.y, color = {0.9, 0.9, 0.95} },
+        },
+    })
 end
 
 function Fog:draw()
-    -- Background cleared by microgame_scene
-
     local dis = self.disorientation.value
+
+    -- Draw background with effects
+    visual_effects.drawBackground()
+    visual_effects.drawAmbientParticles()
 
     -- Calculate camera transform
     local camX = self.camera.x + self.camera.offsetX
@@ -503,6 +516,9 @@ function Fog:draw()
     love.graphics.translate(480, 270)
     love.graphics.scale(zoom)
     love.graphics.translate(-camX, -camY)
+
+    -- Draw trail particles in world space
+    visual_effects.drawTrailParticles()
 
     -- Draw bounds (walls)
     love.graphics.setColor(0.25, 0.25, 0.3)

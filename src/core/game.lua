@@ -1,8 +1,21 @@
 local scene_manager = require("src.core.scene_manager")
+local settings = require("src.core.settings")
 
 local game = {}
 
+local function applySettings()
+    local music = require("src.core.music")
+    local audio = require("src.core.audio")
+    music.setVolume(settings.getMusicVolume())
+    audio.setSfxVolume(settings.getSfxVolume())
+    audio.setFootstepParams(nil, settings.getFootstepVolume())
+end
+
 function game.load()
+    -- Load and apply settings at startup
+    settings.load()
+    applySettings()
+
     scene_manager.setScene(require("src.ui.menu_scene"))
 end
 

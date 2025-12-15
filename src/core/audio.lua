@@ -172,6 +172,9 @@ function audio.init()
     initialized = true
 end
 
+-- Master SFX volume
+local sfxVolume = 0.5
+
 -- Play a sound by name
 function audio.play(name, volume)
     if not initialized then audio.init() end
@@ -179,11 +182,20 @@ function audio.play(name, volume)
     local sound = sounds[name]
     if sound then
         sound:stop() -- Stop if already playing
-        if volume then
-            sound:setVolume(volume)
-        end
+        local finalVolume = (volume or 1) * sfxVolume
+        sound:setVolume(finalVolume)
         sound:play()
     end
+end
+
+-- Set master SFX volume
+function audio.setSfxVolume(vol)
+    sfxVolume = math.max(0, math.min(1, vol))
+end
+
+-- Get master SFX volume
+function audio.getSfxVolume()
+    return sfxVolume
 end
 
 -- Check if a sound exists

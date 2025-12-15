@@ -1,5 +1,6 @@
 local MicroGameBase = require("src.core.microgame_base")
 local input = require("src.core.input")
+local visual_effects = require("src.core.visual_effects")
 
 local Weight = setmetatable({}, { __index = MicroGameBase })
 Weight.__index = Weight
@@ -120,6 +121,7 @@ function Weight:spawnInitialShadows()
 end
 
 function Weight:start()
+    visual_effects.init("burden")
 end
 
 local function dist(x1, y1, x2, y2)
@@ -159,6 +161,15 @@ function Weight:update(dt)
 
     -- Check for end condition (at center, standing still)
     self:checkEndCondition(dt)
+
+    -- Update visual effects (intensity = burden level)
+    visual_effects.update(dt, {
+        intensity = self.burden.value,
+        warmth = 0,
+        entities = {
+            player = { x = self.player.x, y = self.player.y, color = {0.9, 0.85, 0.8} },
+        },
+    })
 end
 
 function Weight:updatePlayer(dt)
@@ -391,8 +402,16 @@ end
 function Weight:draw()
     local burden = math.min(1.0, self.burden.value)
 
-    -- Clear with dark background
-    -- Background cleared by microgame_scene
+    -- Get screen shake offset
+    local shakeX, shakeY = visual_effects.getScreenOffset()
+
+    love.graphics.push()
+    love.graphics.translate(shakeX, shakeY)
+
+    -- Draw background with effects
+    visual_effects.drawBackground()
+    visual_effects.drawAmbientParticles()
+    visual_effects.drawTrailParticles()
 
     -- Draw cleansing zones
     love.graphics.setColor(0.2, 0.5, 0.3, 0.4)
@@ -432,8 +451,13 @@ function Weight:draw()
     love.graphics.rectangle("fill", -10, -10, 20, 20)
     love.graphics.pop()
 
-    -- Vignette / dimming effect
+    -- Draw burst particles
+    visual_effects.drawBurstParticles()
+
+    -- Vignette / dimming effect (custom for Weight - follows player)
     self:drawVignette(burden)
+
+    love.graphics.pop()
 
     -- Draw intrusive message
     if self.message.text and self.message.alpha > 0 then

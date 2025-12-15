@@ -1,6 +1,7 @@
 local scene_manager = require("src.core.scene_manager")
 local registry = require("src.microgames.registry")
 local input = require("src.core.input")
+local settings = require("src.core.settings")
 
 local menu_scene = {}
 menu_scene.__index = menu_scene
@@ -15,9 +16,19 @@ local gamepadNav = {
 
 function menu_scene:load()
     self.microgames = registry.getAll()
+    -- Build menu items: all microgames + settings
+    self.menuItems = {}
+    for _, game in ipairs(self.microgames) do
+        table.insert(self.menuItems, { type = "game", data = game })
+    end
+    table.insert(self.menuItems, { type = "settings", label = "Settings" })
+
     self.selectedIndex = 1
     self.font = love.graphics.newFont(18)
     self.titleFont = love.graphics.newFont(28)
+
+    -- Load settings
+    settings.load()
 end
 
 function menu_scene:update(dt)
@@ -56,9 +67,9 @@ end
 
 function menu_scene:navigate(direction)
     if direction > 0 then
-        self.selectedIndex = self.selectedIndex % #self.microgames + 1
+        self.selectedIndex = self.selectedIndex % #self.menuItems + 1
     elseif direction < 0 then
-        self.selectedIndex = (self.selectedIndex - 2) % #self.microgames + 1
+        self.selectedIndex = (self.selectedIndex - 2) % #self.menuItems + 1
     end
 end
 
@@ -69,14 +80,27 @@ local function startMicroGame(entry)
     scene_manager.setScene(scene)
 end
 
+local function openSettings()
+    local settings_scene = require("src.ui.settings_scene")
+    scene_manager.setScene(settings_scene.new(menu_scene))
+end
+
+function menu_scene:selectItem()
+    local item = self.menuItems[self.selectedIndex]
+    if item.type == "game" then
+        startMicroGame(item.data)
+    elseif item.type == "settings" then
+        openSettings()
+    end
+end
+
 function menu_scene:keypressed(key)
     if key == "down" or key == "s" then
         self:navigate(1)
     elseif key == "up" or key == "w" then
         self:navigate(-1)
     elseif key == "return" or key == "space" then
-        local selected = self.microgames[self.selectedIndex]
-        startMicroGame(selected)
+        self:selectItem()
     elseif key == "escape" then
         love.event.quit()
     end
@@ -84,8 +108,7 @@ end
 
 function menu_scene:gamepadpressed(joystick, button)
     if button == "a" then
-        local selected = self.microgames[self.selectedIndex]
-        startMicroGame(selected)
+        self:selectItem()
     elseif button == "b" or button == "back" then
         love.event.quit()
     elseif button == "dpup" then
@@ -98,17 +121,42 @@ end
 function menu_scene:draw()
     love.graphics.clear(0.08, 0.08, 0.1)
 
+    -- Title
+    love.graphics.setColor(1, 1, 1)
     love.graphics.setFont(self.titleFont)
     love.graphics.print("Emotional Playground", 40, 40)
 
+    -- Menu items
     love.graphics.setFont(self.font)
     local y = 120
-    for i, m in ipairs(self.microgames) do
+    for i, item in ipairs(self.menuItems) do
+        if i == self.selectedIndex then
+            love.graphics.setColor(1, 1, 1)
+        else
+            love.graphics.setColor(0.7, 0.7, 0.7)
+        end
         local prefix = (i == self.selectedIndex) and "> " or "  "
-        love.graphics.print(prefix .. m.name .. "  [" .. m.emlId .. "]", 60, y)
+
+        if item.type == "game" then
+            love.graphics.print(prefix .. item.data.name .. "  [" .. item.data.emlId .. "]", 60, y)
+        elseif item.type == "settings" then
+            -- Add a separator before settings
+            if i > 1 then
+                love.graphics.setColor(0.3, 0.3, 0.35)
+                love.graphics.line(60, y - 8, 400, y - 8)
+                if i == self.selectedIndex then
+                    love.graphics.setColor(1, 1, 1)
+                else
+                    love.graphics.setColor(0.7, 0.7, 0.7)
+                end
+            end
+            love.graphics.print(prefix .. item.label, 60, y)
+        end
         y = y + 28
     end
 
+    -- Controls hint
+    love.graphics.setColor(0.5, 0.5, 0.55)
     local hasGamepad = input.hasGamepad()
     if hasGamepad then
         love.graphics.print("Stick/D-pad: select | A: play | B: quit", 60, y + 20)

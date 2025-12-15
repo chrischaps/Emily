@@ -2,6 +2,7 @@ local MicroGameBase = require("src.core.microgame_base")
 local audio = require("src.core.audio")
 local music = require("src.core.music")
 local input = require("src.core.input")
+local visual_effects = require("src.core.visual_effects")
 
 local FogExit = setmetatable({}, { __index = MicroGameBase })
 FogExit.__index = FogExit
@@ -212,6 +213,8 @@ function FogExit:start()
     -- Give player a coin to establish the UI element exists
     self:addCoins(1)
     audio.play("coin", 0.3)
+    -- Initialize visual effects
+    visual_effects.init("confusion")
 end
 
 function FogExit:getPhase()
@@ -803,12 +806,23 @@ function FogExit:update(dt)
     -- Update music (for fading) and modulate based on disorientation
     music.update(dt)
     music.modulate(self.disorientation.value)
+
+    -- Update visual effects
+    visual_effects.update(dt, {
+        intensity = self.disorientation.value,
+        warmth = 0,
+        entities = {
+            player = { x = self.player.x, y = self.player.y, color = {0.9, 0.9, 0.95} },
+        },
+    })
 end
 
 function FogExit:draw()
-    -- Note: Background cleared by microgame_scene before effects are drawn
-
     local dis = self.disorientation.value
+
+    -- Draw background with effects
+    visual_effects.drawBackground()
+    visual_effects.drawAmbientParticles()
 
     -- Camera transform
     local camX = self.camera.x + self.camera.offsetX
@@ -817,6 +831,9 @@ function FogExit:draw()
     love.graphics.push()
     love.graphics.translate(480, 270)
     love.graphics.translate(-camX, -camY)
+
+    -- Draw trail particles in world space
+    visual_effects.drawTrailParticles()
 
     -- Draw bounds
     love.graphics.setColor(0.25, 0.25, 0.3)
