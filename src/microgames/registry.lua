@@ -72,6 +72,18 @@ local microgames = {
             local hold = require("src.microgames.hold.init")
             return hold.new()
         end
+    },
+    {
+        id = "ledger",
+        name = "Ledger",
+        emlId = "EML-10",
+        emotions = {"complicity", "guilt", "moral ambiguity", "discomfort"},
+        description = "Process items efficiently. The system rewards optimization.",
+        expectedDuration = "2-4 min",
+        create = function()
+            local ledger = require("src.microgames.ledger.init")
+            return ledger.new()
+        end
     }
 }
 

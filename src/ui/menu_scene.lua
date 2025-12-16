@@ -2,6 +2,7 @@ local scene_manager = require("src.core.scene_manager")
 local registry = require("src.microgames.registry")
 local input = require("src.core.input")
 local settings = require("src.core.settings")
+local audio = require("src.core.audio")
 
 local menu_scene = {}
 menu_scene.__index = menu_scene
@@ -27,8 +28,9 @@ function menu_scene:load()
     self.font = love.graphics.newFont(18)
     self.titleFont = love.graphics.newFont(28)
 
-    -- Load settings
+    -- Load settings and init audio
     settings.load()
+    audio.init()
 end
 
 function menu_scene:update(dt)
@@ -71,6 +73,7 @@ function menu_scene:navigate(direction)
     elseif direction < 0 then
         self.selectedIndex = (self.selectedIndex - 2) % #self.menuItems + 1
     end
+    audio.play("ui_navigate")
 end
 
 local function startMicroGame(entry)
@@ -86,6 +89,7 @@ local function openSettings()
 end
 
 function menu_scene:selectItem()
+    audio.play("ui_select")
     local item = self.menuItems[self.selectedIndex]
     if item.type == "game" then
         startMicroGame(item.data)
@@ -124,7 +128,7 @@ function menu_scene:draw()
     -- Title
     love.graphics.setColor(1, 1, 1)
     love.graphics.setFont(self.titleFont)
-    love.graphics.print("Emotional Playground", 40, 40)
+    love.graphics.print("EML Playground", 40, 40)
 
     -- Menu items
     love.graphics.setFont(self.font)

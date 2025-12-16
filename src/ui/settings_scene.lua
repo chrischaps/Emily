@@ -1,6 +1,7 @@
 local scene_manager = require("src.core.scene_manager")
 local settings = require("src.core.settings")
 local input = require("src.core.input")
+local audio = require("src.core.audio")
 
 local settings_scene = {}
 settings_scene.__index = settings_scene
@@ -38,6 +39,7 @@ function settings_scene:load()
     self.font = love.graphics.newFont(18)
     self.titleFont = love.graphics.newFont(28)
     settings.load()  -- Load saved settings
+    audio.init()
 end
 
 function settings_scene:update(dt)
@@ -106,6 +108,7 @@ function settings_scene:navigate(direction)
     elseif direction < 0 then
         self.selectedIndex = (self.selectedIndex - 2) % #settingsItems + 1
     end
+    audio.play("ui_navigate")
 end
 
 function settings_scene:adjustValue(direction)
@@ -115,6 +118,7 @@ function settings_scene:adjustValue(direction)
     newValue = math.max(item.min, math.min(item.max, newValue))
     settings.set(item.key, newValue)
     self:applySettings()
+    audio.play("ui_adjust")
 end
 
 function settings_scene:applySettings()
@@ -129,6 +133,7 @@ end
 
 function settings_scene:keypressed(key)
     if key == "escape" or key == "backspace" then
+        audio.play("ui_back")
         settings.save()
         self:applySettings()
         scene_manager.setScene(self.returnScene)
@@ -147,6 +152,7 @@ end
 
 function settings_scene:gamepadpressed(joystick, button)
     if button == "b" or button == "back" then
+        audio.play("ui_back")
         settings.save()
         self:applySettings()
         scene_manager.setScene(self.returnScene)

@@ -8,7 +8,7 @@ local defaults = {
     musicVolume = 0.45,
     sfxVolume = 0.5,
     footstepVolume = 0.28,
-    slideVolume = 0.4
+    slideVolume = 1.0  -- Max shown is actually 40% due to internal cap
 }
 
 -- Current settings (start with defaults)

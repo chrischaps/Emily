@@ -129,18 +129,22 @@ function microgame_scene:navigatePause(direction)
     elseif direction < 0 then
         self.pauseSelectedIndex = (self.pauseSelectedIndex - 2) % #pauseOptions + 1
     end
+    audio.play("ui_navigate")
 end
 
 function microgame_scene:selectPauseOption()
     local option = pauseOptions[self.pauseSelectedIndex]
     if option.action == "resume" then
+        audio.play("ui_back")
         self.paused = false
         self.pauseSelectedIndex = 1
     elseif option.action == "settings" then
+        audio.play("ui_select")
         -- Go to settings, return to this scene when done
         local settings_scene = require("src.ui.settings_scene")
         scene_manager.setScene(settings_scene.new(self))
     elseif option.action == "menu" then
+        audio.play("ui_select")
         effects.reset()
         scene_manager.setScene(require("src.ui.menu_scene"))
     end
@@ -221,6 +225,7 @@ function microgame_scene:keypressed(key, scancode, isrepeat)
     -- Handle pause menu input
     if self.paused then
         if key == "escape" then
+            audio.play("ui_back")
             self.paused = false
             self.pauseSelectedIndex = 1
         elseif key == "return" or key == "space" then
@@ -235,6 +240,7 @@ function microgame_scene:keypressed(key, scancode, isrepeat)
 
     -- Toggle pause
     if key == "escape" then
+        audio.play("ui_select")
         self.paused = true
         return
     end
@@ -258,6 +264,7 @@ function microgame_scene:gamepadpressed(joystick, button)
     -- Handle pause menu input
     if self.paused then
         if button == "b" then
+            audio.play("ui_back")
             self.paused = false
             self.pauseSelectedIndex = 1
         elseif button == "a" then
@@ -272,6 +279,7 @@ function microgame_scene:gamepadpressed(joystick, button)
 
     -- Toggle pause with Start button
     if button == "start" then
+        audio.play("ui_select")
         self.paused = true
         return
     end

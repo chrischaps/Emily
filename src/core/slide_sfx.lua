@@ -9,17 +9,21 @@ local SAMPLE_RATE = 44100
 local state = nil
 local initialized = false
 
--- Generate a sliding/whoosh sound for player (warmer, earthier)
+-- Max volume multiplier (UI 100% = this actual volume)
+local MAX_VOLUME_MULT = 0.4
+
+-- Generate a sliding/whoosh sound for player (warmer, earthier, heavily filtered)
 local function generatePlayerSlideSound(duration)
     local samples = math.floor(SAMPLE_RATE * duration)
     local soundData = love.sound.newSoundData(samples, SAMPLE_RATE, 16, 1)
 
-    local basePitch = 80
+    local basePitch = 65  -- Lower base pitch for warmer sound
 
-    -- Use a simple noise + filtered tone approach
-    local prevSample = 0
+    -- Multi-stage filter state for very smooth sound
+    local prevSample1 = 0
     local prevSample2 = 0
-    local filterCoeff = 0.88  -- Low-pass filter coefficient (warmer)
+    local prevSample3 = 0
+    local filterCoeff = 0.92  -- Heavy low-pass filtering
 
     for i = 0, samples - 1 do
         local t = i / SAMPLE_RATE
@@ -33,20 +37,22 @@ local function generatePlayerSlideSound(duration)
             envelope = (duration - t) / fadeTime
         end
 
-        -- Filtered noise (main sliding texture) - two-pole for smoother sound
+        -- Filtered noise - three-pole cascade for very smooth sound
         local noise = math.random() * 2 - 1
-        local filteredNoise = prevSample * filterCoeff + noise * (1 - filterCoeff)
-        filteredNoise = prevSample2 * 0.5 + filteredNoise * 0.5
-        prevSample2 = prevSample
-        prevSample = filteredNoise
+        local filtered = prevSample1 * filterCoeff + noise * (1 - filterCoeff)
+        filtered = prevSample2 * filterCoeff + filtered * (1 - filterCoeff)
+        filtered = prevSample3 * filterCoeff + filtered * (1 - filterCoeff)
+        prevSample3 = prevSample2
+        prevSample2 = prevSample1
+        prevSample1 = filtered
 
-        -- Warm pitched component with harmonics
-        local pitched = math.sin(2 * math.pi * basePitch * t) * 0.18
-        pitched = pitched + math.sin(2 * math.pi * basePitch * 2 * t) * 0.08
-        pitched = pitched + math.sin(2 * math.pi * basePitch * 0.5 * t) * 0.1  -- Sub
+        -- Warm pitched component - mostly sub frequencies
+        local pitched = math.sin(2 * math.pi * basePitch * t) * 0.2
+        pitched = pitched + math.sin(2 * math.pi * basePitch * 0.5 * t) * 0.15  -- Sub
+        pitched = pitched + math.sin(2 * math.pi * basePitch * 2 * t) * 0.03   -- Gentle overtone
 
-        -- Combine
-        local sample = (filteredNoise * 0.6 + pitched) * envelope * 0.35
+        -- Combine - less noise, more pitched warmth
+        local sample = (filtered * 0.4 + pitched) * envelope * 0.35
 
         soundData:setSample(i, math.max(-1, math.min(1, sample)))
     end
@@ -56,15 +62,17 @@ local function generatePlayerSlideSound(duration)
     return source
 end
 
--- Generate a slide for the Other entity (airier, more ethereal)
+-- Generate a slide for the Other entity (softer, more ethereal)
 local function generateOtherSlideSound(duration)
     local samples = math.floor(SAMPLE_RATE * duration)
     local soundData = love.sound.newSoundData(samples, SAMPLE_RATE, 16, 1)
 
-    local basePitch = 220
+    local basePitch = 180  -- Lower than before
 
-    local prevSample = 0
-    local filterCoeff = 0.7  -- Brighter, more airy
+    -- Multi-stage filter for smoother sound
+    local prevSample1 = 0
+    local prevSample2 = 0
+    local filterCoeff = 0.85  -- More filtering than before
 
     for i = 0, samples - 1 do
         local t = i / SAMPLE_RATE
@@ -78,21 +86,20 @@ local function generateOtherSlideSound(duration)
             envelope = (duration - t) / fadeTime
         end
 
-        -- Breathier noise with less filtering
+        -- Filtered noise - two-pole for smooth but present texture
         local noise = math.random() * 2 - 1
-        local filteredNoise = prevSample * filterCoeff + noise * (1 - filterCoeff)
-        prevSample = filteredNoise
+        local filtered = prevSample1 * filterCoeff + noise * (1 - filterCoeff)
+        filtered = prevSample2 * filterCoeff + filtered * (1 - filterCoeff)
+        prevSample2 = prevSample1
+        prevSample1 = filtered
 
-        -- Ethereal pitched component - higher, with slight detuning for shimmer
-        local shimmer = math.sin(t * 3) * 0.02  -- Slow pitch wobble
-        local pitched = math.sin(2 * math.pi * basePitch * (1 + shimmer) * t) * 0.12
-        pitched = pitched + math.sin(2 * math.pi * basePitch * 1.5 * t) * 0.08  -- Fifth
-        pitched = pitched + math.sin(2 * math.pi * basePitch * 2.01 * t) * 0.05  -- Detuned octave
+        -- Softer ethereal pitched component
+        local shimmer = math.sin(t * 2) * 0.015  -- Slower, subtler wobble
+        local pitched = math.sin(2 * math.pi * basePitch * (1 + shimmer) * t) * 0.1
+        pitched = pitched + math.sin(2 * math.pi * basePitch * 1.5 * t) * 0.05  -- Soft fifth
+        pitched = pitched + math.sin(2 * math.pi * basePitch * 0.5 * t) * 0.08  -- Sub for warmth
 
-        -- Add subtle resonant ping
-        local resonance = math.sin(2 * math.pi * 440 * t) * 0.03 * math.exp(-t * 8)
-
-        local sample = (filteredNoise * 0.5 + pitched + resonance) * envelope * 0.3
+        local sample = (filtered * 0.35 + pitched) * envelope * 0.3
 
         soundData:setSample(i, math.max(-1, math.min(1, sample)))
     end
@@ -141,8 +148,8 @@ end
 function slide_sfx.update(dt, playerSpeed, maxPlayerSpeed, otherSpeed, otherDistance)
     if not initialized or not state then return end
 
-    -- Update master volume from settings
-    state.masterVolume = settings.getSlideVolume()
+    -- Update master volume from settings (scaled by max multiplier)
+    state.masterVolume = settings.getSlideVolume() * MAX_VOLUME_MULT
 
     -- Calculate target player volume and pitch based on speed (0-1 range)
     local speedRatio = 0

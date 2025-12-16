@@ -129,6 +129,279 @@ local function lerp(a, b, t)
     return a + (b - a) * t
 end
 
+-- Draw an organic blob shape with wobbling edges
+local function drawBlob(x, y, baseRadius, time, wobbleAmount, segments, r, g, b, a)
+    segments = segments or 24
+    wobbleAmount = wobbleAmount or 0.15
+
+    local vertices = {}
+    for i = 0, segments - 1 do
+        local angle = (i / segments) * math.pi * 2
+
+        -- Multiple sine waves for organic wobble
+        local wobble1 = math.sin(angle * 3 + time * 2) * wobbleAmount
+        local wobble2 = math.sin(angle * 5 - time * 1.5) * wobbleAmount * 0.5
+        local wobble3 = math.sin(angle * 2 + time * 0.8) * wobbleAmount * 0.3
+
+        local radius = baseRadius * (1 + wobble1 + wobble2 + wobble3)
+
+        local vx = x + math.cos(angle) * radius
+        local vy = y + math.sin(angle) * radius
+        table.insert(vertices, vx)
+        table.insert(vertices, vy)
+    end
+
+    love.graphics.setColor(r, g, b, a)
+    if #vertices >= 6 then
+        love.graphics.polygon("fill", vertices)
+    end
+end
+
+-- Draw a soft, organic glow around a point
+local function drawOrganicGlow(x, y, baseRadius, time, layers, r, g, b, baseAlpha)
+    layers = layers or 5
+    for i = layers, 1, -1 do
+        local layerRatio = i / layers
+        local radius = baseRadius * (0.5 + layerRatio * 0.8)
+        local alpha = baseAlpha * (1 - layerRatio) * 0.5
+        local wobble = 0.1 + layerRatio * 0.1
+        drawBlob(x, y, radius, time + i * 0.3, wobble, 20, r, g, b, alpha)
+    end
+end
+
+-- Draw flowing tendrils extending from a point
+local function drawTendrils(x, y, baseRadius, time, count, length, r, g, b, baseAlpha)
+    count = count or 5
+    length = length or 30
+
+    for i = 1, count do
+        local baseAngle = (i / count) * math.pi * 2 + time * 0.3
+        local angleWobble = math.sin(time * 1.5 + i * 1.7) * 0.3
+
+        local segments = 8
+        local prevX, prevY = x, y
+
+        for j = 1, segments do
+            local t = j / segments
+            local segAngle = baseAngle + angleWobble * t + math.sin(time * 2 + j * 0.5) * 0.2 * t
+
+            local dist = baseRadius + length * t * (0.7 + 0.3 * math.sin(time + i))
+            local tx = x + math.cos(segAngle) * dist
+            local ty = y + math.sin(segAngle) * dist
+
+            local thickness = (1 - t) * 4 + 1
+            local alpha = baseAlpha * (1 - t * 0.8)
+
+            love.graphics.setColor(r, g, b, alpha)
+            love.graphics.setLineWidth(thickness)
+            love.graphics.line(prevX, prevY, tx, ty)
+
+            prevX, prevY = tx, ty
+        end
+    end
+    love.graphics.setLineWidth(1)
+end
+
+-- Ambient background element data (generated once, animated over time)
+local ambientElements = nil
+
+local function initAmbientElements()
+    if ambientElements then return end
+
+    ambientElements = {
+        -- Floating organic spores
+        spores = {},
+        -- Drifting geometric shapes
+        shapes = {},
+        -- Flowing current lines
+        currents = {},
+        -- Soft light spots
+        lights = {},
+    }
+
+    -- Generate spores
+    for i = 1, 25 do
+        table.insert(ambientElements.spores, {
+            x = math.random() * 960,
+            y = math.random() * 540,
+            size = 2 + math.random() * 4,
+            speed = 0.15 + math.random() * 0.25,
+            phase = math.random() * math.pi * 2,
+            wobbleSpeed = 0.5 + math.random() * 1,
+            driftAngle = math.random() * math.pi * 2,
+        })
+    end
+
+    -- Generate abstract shapes
+    for i = 1, 12 do
+        table.insert(ambientElements.shapes, {
+            x = math.random() * 960,
+            y = math.random() * 540,
+            size = 15 + math.random() * 35,
+            rotation = math.random() * math.pi * 2,
+            rotSpeed = (math.random() - 0.5) * 0.3,
+            sides = math.random(3, 6),
+            drift = { x = (math.random() - 0.5) * 0.2, y = (math.random() - 0.5) * 0.15 },
+            phase = math.random() * math.pi * 2,
+            hollow = math.random() > 0.5,
+        })
+    end
+
+    -- Generate flowing currents
+    for i = 1, 8 do
+        local startX = math.random() * 960
+        local startY = math.random() * 540
+        table.insert(ambientElements.currents, {
+            startX = startX,
+            startY = startY,
+            length = 80 + math.random() * 120,
+            angle = math.random() * math.pi * 2,
+            speed = 0.3 + math.random() * 0.4,
+            phase = math.random() * math.pi * 2,
+            waveAmp = 10 + math.random() * 20,
+        })
+    end
+
+    -- Generate soft light spots
+    for i = 1, 6 do
+        table.insert(ambientElements.lights, {
+            x = math.random() * 960,
+            y = math.random() * 540,
+            size = 40 + math.random() * 80,
+            pulseSpeed = 0.3 + math.random() * 0.5,
+            phase = math.random() * math.pi * 2,
+            drift = { x = (math.random() - 0.5) * 0.1, y = (math.random() - 0.5) * 0.08 },
+        })
+    end
+end
+
+-- Draw ambient background elements
+local function drawAmbientBackground(time, warmth, intimacy)
+    if not ambientElements then initAmbientElements() end
+
+    local baseAlpha = 0.03 + intimacy * 0.04
+
+    -- Colors shift with warmth
+    local coolR, coolG, coolB = 0.3, 0.4, 0.6
+    local warmR, warmG, warmB = 0.5, 0.45, 0.55
+    local r = lerp(coolR, warmR, warmth)
+    local g = lerp(coolG, warmG, warmth)
+    local b = lerp(coolB, warmB, warmth)
+
+    -- Draw soft light spots (furthest back)
+    for _, light in ipairs(ambientElements.lights) do
+        local pulse = 0.5 + 0.5 * math.sin(time * light.pulseSpeed + light.phase)
+        local x = (light.x + light.drift.x * time * 50) % 960
+        local y = (light.y + light.drift.y * time * 50) % 540
+        local size = light.size * (0.8 + pulse * 0.4)
+
+        -- Soft radial gradient
+        for layer = 5, 1, -1 do
+            local layerSize = size * (layer / 5)
+            local layerAlpha = baseAlpha * 0.4 * (1 - layer / 6) * pulse
+            love.graphics.setColor(r + 0.1, g + 0.1, b + 0.05, layerAlpha)
+            love.graphics.circle("fill", x, y, layerSize)
+        end
+    end
+
+    -- Draw flowing currents
+    love.graphics.setLineWidth(1.5)
+    for _, current in ipairs(ambientElements.currents) do
+        local segments = 15
+        local prevX, prevY = nil, nil
+
+        for i = 0, segments do
+            local t = i / segments
+            local flowOffset = time * current.speed + current.phase
+
+            -- Organic wave motion
+            local wave = math.sin(t * math.pi * 2 + flowOffset) * current.waveAmp
+            local wave2 = math.sin(t * math.pi * 3 - flowOffset * 0.7) * current.waveAmp * 0.3
+
+            local angle = current.angle + (wave + wave2) * 0.01
+            local dist = t * current.length
+
+            local x = current.startX + math.cos(angle) * dist + math.sin(flowOffset + t * 3) * wave * 0.5
+            local y = current.startY + math.sin(angle) * dist + math.cos(flowOffset + t * 2) * wave * 0.3
+
+            -- Wrap around screen
+            x = x % 960
+            y = y % 540
+
+            local alpha = baseAlpha * 0.8 * math.sin(t * math.pi) -- Fade at ends
+
+            if prevX and math.abs(x - prevX) < 100 and math.abs(y - prevY) < 100 then
+                love.graphics.setColor(r, g, b + 0.1, alpha)
+                love.graphics.line(prevX, prevY, x, y)
+            end
+
+            prevX, prevY = x, y
+        end
+    end
+    love.graphics.setLineWidth(1)
+
+    -- Draw abstract geometric shapes
+    for _, shape in ipairs(ambientElements.shapes) do
+        local x = (shape.x + shape.drift.x * time * 60) % 960
+        local y = (shape.y + shape.drift.y * time * 60) % 540
+        local rot = shape.rotation + time * shape.rotSpeed
+        local pulse = 0.7 + 0.3 * math.sin(time * 0.8 + shape.phase)
+        local size = shape.size * pulse
+
+        -- Build polygon vertices
+        local vertices = {}
+        for i = 0, shape.sides - 1 do
+            local angle = rot + (i / shape.sides) * math.pi * 2
+            local wobble = math.sin(time + i * 1.3) * 0.1
+            local vx = x + math.cos(angle) * size * (1 + wobble)
+            local vy = y + math.sin(angle) * size * (1 + wobble)
+            table.insert(vertices, vx)
+            table.insert(vertices, vy)
+        end
+
+        local shapeAlpha = baseAlpha * 0.6 * pulse
+        love.graphics.setColor(r - 0.05, g, b + 0.1, shapeAlpha)
+
+        if shape.hollow then
+            love.graphics.setLineWidth(1.5)
+            if #vertices >= 6 then
+                table.insert(vertices, vertices[1])
+                table.insert(vertices, vertices[2])
+                love.graphics.line(vertices)
+            end
+            love.graphics.setLineWidth(1)
+        else
+            if #vertices >= 6 then
+                love.graphics.polygon("fill", vertices)
+            end
+        end
+    end
+
+    -- Draw organic spores (closest layer)
+    for _, spore in ipairs(ambientElements.spores) do
+        local wobbleX = math.sin(time * spore.wobbleSpeed + spore.phase) * 15
+        local wobbleY = math.cos(time * spore.wobbleSpeed * 0.8 + spore.phase) * 10
+
+        -- Slow drift
+        local driftX = math.cos(spore.driftAngle) * time * spore.speed * 30
+        local driftY = math.sin(spore.driftAngle) * time * spore.speed * 30
+
+        local x = (spore.x + wobbleX + driftX) % 960
+        local y = (spore.y + wobbleY + driftY) % 540
+
+        local pulse = 0.6 + 0.4 * math.sin(time * 2 + spore.phase)
+        local size = spore.size * pulse
+
+        -- Draw organic spore shape
+        local sporeAlpha = baseAlpha * 1.2 * pulse
+        drawBlob(x, y, size, time + spore.phase, 0.25, 8, r + 0.15, g + 0.1, b, sporeAlpha)
+
+        -- Tiny bright center
+        love.graphics.setColor(r + 0.3, g + 0.25, b + 0.1, sporeAlpha * 0.5)
+        love.graphics.circle("fill", x, y, size * 0.3)
+    end
+end
+
 function Hold:update(dt)
     if self.ending then
         self:updateEnding(dt)
@@ -895,6 +1168,9 @@ function Hold:draw()
     -- Draw background with breathing effect
     visual_effects.drawBackground(self.intimacy.value, self.warmth)
 
+    -- Draw custom ambient background elements (organic spores, shapes, currents, lights)
+    drawAmbientBackground(self.gameTime, self.warmth, self.intimacy.value)
+
     -- Draw ambient particles (behind everything)
     visual_effects.drawAmbientParticles()
 
@@ -944,65 +1220,117 @@ end
 function Hold:drawConnectionGlow()
     local px, py = self.player.x, self.player.y
     local ox, oy = self.other.x, self.other.y
+    local time = self.syncPulse
 
     -- Calculate connection properties
     local dx, dy = ox - px, oy - py
-    local dist = math.sqrt(dx * dx + dy * dy)
-    if dist < 1 then return end
+    local distance = math.sqrt(dx * dx + dy * dy)
+    if distance < 1 then return end
 
     -- Perpendicular offset for wave effect
-    local perpX, perpY = -dy / dist, dx / dist
+    local perpX, perpY = -dy / distance, dx / distance
 
-    -- Draw soft glow along connection line with wave
-    local steps = 25
-    for i = 0, steps do
-        local t = i / steps
+    -- Color shifts warm with intimacy
+    local r = 0.45 + self.warmth * 0.35
+    local g = 0.55 + self.warmth * 0.15
+    local b = 0.75 - self.warmth * 0.25
 
-        -- Wave offset perpendicular to connection line
-        local wavePhase = self.syncPulse * 2 + t * math.pi * 2
-        local waveAmp = 5 + self.intimacy.value * 10
+    -- Draw organic connection strands
+    local strandCount = 3 + math.floor(self.intimacy.value * 3)
+    for strand = 1, strandCount do
+        local strandOffset = (strand - 1) / strandCount * math.pi * 2
+        local strandWobble = math.sin(time + strandOffset) * 8
+
+        local steps = 20
+        local prevX, prevY = px, py
+
+        for i = 1, steps do
+            local t = i / steps
+
+            -- Multiple wave layers for organic feel
+            local wave1 = math.sin(time * 2 + t * math.pi * 3 + strandOffset) * (8 + self.intimacy.value * 6)
+            local wave2 = math.sin(time * 1.3 - t * math.pi * 2 + strandOffset * 0.7) * 4
+            local wave3 = math.sin(time * 3.5 + t * math.pi * 5) * 2 * self.intimacy.value
+
+            -- Taper wave amplitude at ends
+            local taper = 1 - math.abs(t - 0.5) * 2
+            taper = math.max(0, taper)
+            local totalWave = (wave1 + wave2 + wave3 + strandWobble) * taper
+
+            local x = lerp(px, ox, t) + perpX * totalWave
+            local y = lerp(py, oy, t) + perpY * totalWave
+
+            -- Pulse travels along connection
+            local pulse = 0.5 + 0.5 * math.sin(time * 3 - t * math.pi * 2 + strandOffset)
+
+            -- Thickness tapers at ends
+            local thickness = (2 + self.glowIntensity * 4) * taper * pulse
+            local alpha = self.glowIntensity * 0.15 * taper * pulse / strandCount * 2
+
+            if i > 1 and thickness > 0.5 then
+                love.graphics.setColor(r, g, b, alpha)
+                love.graphics.setLineWidth(thickness)
+                love.graphics.line(prevX, prevY, x, y)
+            end
+
+            prevX, prevY = x, y
+        end
+    end
+
+    -- Draw organic blobs along the main connection path
+    local blobCount = 12
+    for i = 1, blobCount do
+        local t = i / (blobCount + 1)
+
+        -- Organic movement
+        local wavePhase = time * 2 + t * math.pi * 2
+        local waveAmp = 6 + self.intimacy.value * 8
         local wave = math.sin(wavePhase) * waveAmp * (1 - math.abs(t - 0.5) * 2)
 
         local x = lerp(px, ox, t) + perpX * wave
         local y = lerp(py, oy, t) + perpY * wave
 
-        -- Pulse effect - travels along the connection
-        local pulse = 0.6 + 0.4 * math.sin(self.syncPulse * 3 - t * math.pi * 2)
-
-        -- Color shifts warm with intimacy
-        local r = 0.45 + self.warmth * 0.35
-        local g = 0.55 + self.warmth * 0.15
-        local b = 0.75 - self.warmth * 0.25
-
-        -- Size tapers at ends
+        local pulse = 0.6 + 0.4 * math.sin(time * 3 - t * math.pi * 2)
         local taper = 1 - math.abs(t - 0.5) * 1.5
-        taper = math.max(0.3, taper)
+        taper = math.max(0.2, taper)
 
-        local size = (12 + self.glowIntensity * 18) * pulse * taper
-        local alpha = self.glowIntensity * 0.12 * pulse * taper
+        local size = (8 + self.glowIntensity * 12) * pulse * taper
+        local alpha = self.glowIntensity * 0.08 * pulse * taper
 
-        love.graphics.setColor(r, g, b, alpha)
-        love.graphics.circle("fill", x, y, size)
-
-        -- Inner brighter core
-        love.graphics.setColor(r + 0.1, g + 0.1, b, alpha * 0.6)
-        love.graphics.circle("fill", x, y, size * 0.5)
+        drawBlob(x, y, size, time + i * 0.5, 0.2, 10, r, g, b, alpha)
+        drawBlob(x, y, size * 0.5, time * 1.5 + i * 0.3, 0.15, 8, r + 0.1, g + 0.1, b, alpha * 0.6)
     end
+
+    love.graphics.setLineWidth(1)
 end
 
 function Hold:drawOther()
     local o = self.other
-    local pulse = 0.9 + 0.1 * math.sin(o.pulsePhase * 2)
+    local time = o.pulsePhase
+    local pulse = 0.9 + 0.1 * math.sin(time * 2)
 
     -- Base color depends on state
     local r, g, b = 0.5, 0.6, 0.8
+    local wobbleAmount = 0.12
+    local tendrilCount = 4
+    local tendrilLength = 25
+
     if o.state == "attuning" then
         r, g, b = 0.6, 0.7, 0.85
+        wobbleAmount = 0.15
+        tendrilCount = 5
+        tendrilLength = 30 + self.intimacy.value * 15
     elseif o.state == "open" then
         r, g, b = 0.7 + self.warmth * 0.2, 0.75, 0.8 - self.warmth * 0.2
+        wobbleAmount = 0.18
+        tendrilCount = 6
+        tendrilLength = 35 + self.intimacy.value * 20
     elseif o.state == "withdrawn" then
         r, g, b = 0.35, 0.4, 0.5
-        pulse = 0.95 + 0.05 * math.sin(o.pulsePhase * 4)  -- Faster, tighter pulse
+        pulse = 0.95 + 0.05 * math.sin(time * 4)
+        wobbleAmount = 0.08
+        tendrilCount = 3
+        tendrilLength = 15
     end
 
     -- Draw invitation indicator (subtle hint of where Other is heading)
@@ -1010,98 +1338,95 @@ function Hold:drawOther()
         local invX = self.dance.invitationTarget.x
         local invY = self.dance.invitationTarget.y
 
-        -- Subtle pulsing indicator at invitation target
-        local invPulse = 0.5 + 0.5 * math.sin(o.pulsePhase * 3)
-        love.graphics.setColor(r, g, b, 0.12 * invPulse)
-        love.graphics.circle("fill", invX, invY, 30 * invPulse)
-        love.graphics.setColor(r, g, b, 0.06 * invPulse)
-        love.graphics.circle("fill", invX, invY, 45 * invPulse)
+        -- Organic pulsing indicator at invitation target
+        local invPulse = 0.5 + 0.5 * math.sin(time * 3)
+        drawBlob(invX, invY, 25 * invPulse, time * 2, 0.2, 16, r, g, b, 0.1 * invPulse)
+        drawBlob(invX, invY, 40 * invPulse, time * 1.5, 0.15, 16, r, g, b, 0.05 * invPulse)
 
-        -- Faint trail from Other toward invitation
+        -- Faint organic trail from Other toward invitation
         local steps = 6
         for i = 1, steps do
             local t = i / (steps + 1)
             local trailX = lerp(o.x, invX, t)
             local trailY = lerp(o.y, invY, t)
             local trailAlpha = 0.08 * (1 - t) * invPulse
-            love.graphics.setColor(r, g, b, trailAlpha)
-            love.graphics.circle("fill", trailX, trailY, 10 * (1 - t * 0.5))
+            local trailSize = 8 * (1 - t * 0.5)
+            drawBlob(trailX, trailY, trailSize, time + i, 0.2, 12, r, g, b, trailAlpha)
         end
     end
 
-    -- Enhanced multi-layer glow
+    -- Draw flowing tendrils (more when intimate)
+    if self.intimacy.value > 0.1 then
+        local tendrilAlpha = 0.15 * self.intimacy.value
+        drawTendrils(o.x, o.y, 18 * pulse, time, tendrilCount, tendrilLength, r, g, b, tendrilAlpha)
+    end
+
+    -- Organic outer glow
     local glowIntensity = 0.3 + self.glowIntensity * 0.7
-    visual_effects.drawEntityGlow(o.x, o.y, 35 * pulse, r, g, b, glowIntensity)
+    local glowSize = 40 + self.glowIntensity * 25
+    drawOrganicGlow(o.x, o.y, glowSize * pulse, time, 6, r, g, b, glowIntensity * 0.3)
 
-    -- Outer glow ring
-    local glowSize = 35 + self.glowIntensity * 20
-    love.graphics.setColor(r, g, b, 0.08 + self.glowIntensity * 0.08)
-    love.graphics.circle("fill", o.x, o.y, glowSize * pulse)
+    -- Main organic body
+    local size = 20 * pulse
+    drawBlob(o.x, o.y, size, time, wobbleAmount, 24, r, g, b, 0.85)
 
-    -- Secondary glow layer
-    love.graphics.setColor(r * 0.8, g * 0.9, b, 0.15 + self.glowIntensity * 0.1)
-    love.graphics.circle("fill", o.x, o.y, 25 * pulse)
+    -- Inner layers with different wobble phases
+    drawBlob(o.x, o.y, size * 0.7, time * 1.3, wobbleAmount * 0.8, 20, r + 0.1, g + 0.1, b, 0.5)
+    drawBlob(o.x, o.y, size * 0.45, time * 1.6, wobbleAmount * 0.6, 16, r + 0.2, g + 0.15, b + 0.05, 0.6)
 
-    -- Inner shape
-    local size = 18 * pulse
-    love.graphics.setColor(r, g, b, 0.85)
-    love.graphics.circle("fill", o.x, o.y, size)
+    -- Bright organic core
+    local coreAlpha = 0.4 + self.intimacy.value * 0.4
+    drawBlob(o.x, o.y, size * 0.3, time * 2, wobbleAmount * 0.4, 12, 1, 1, 1, coreAlpha)
 
-    -- Highlight
-    love.graphics.setColor(r + 0.2, g + 0.15, b + 0.1, 0.4)
-    love.graphics.circle("fill", o.x - size * 0.25, o.y - size * 0.25, size * 0.35)
-
-    -- Core
-    love.graphics.setColor(1, 1, 1, 0.35 + self.intimacy.value * 0.35)
-    love.graphics.circle("fill", o.x, o.y, size * 0.4)
-
-    -- Inner core sparkle
-    local sparkle = 0.5 + 0.5 * math.sin(o.pulsePhase * 5)
-    love.graphics.setColor(1, 1, 1, 0.2 * sparkle * self.intimacy.value)
-    love.graphics.circle("fill", o.x, o.y, size * 0.2)
+    -- Inner sparkle
+    local sparkle = 0.5 + 0.5 * math.sin(time * 5)
+    drawBlob(o.x, o.y, size * 0.15, time * 2.5, 0.3, 10, 1, 1, 1, 0.25 * sparkle * self.intimacy.value)
 end
 
 function Hold:drawPlayer()
     local p = self.player
-    local pulse = 0.95 + 0.05 * math.sin(self.syncPulse * 2)
+    local time = self.syncPulse
+    local pulse = 0.95 + 0.05 * math.sin(time * 2)
 
-    -- Enhanced glow (syncs with Other at high intimacy)
-    local r, g, b = 0.75 + self.warmth * 0.15, 0.8, 0.9 - self.warmth * 0.1
+    -- Player colors (slightly warmer than before)
+    local r, g, b = 0.8 + self.warmth * 0.1, 0.82, 0.92 - self.warmth * 0.08
 
+    -- Wobble increases slightly with movement
+    local speed = math.sqrt(p.vx * p.vx + p.vy * p.vy)
+    local speedRatio = math.min(1, speed / p.maxSpeed)
+    local wobbleAmount = 0.1 + speedRatio * 0.08
+
+    -- Draw tendrils when moving or intimate
+    if self.intimacy.value > 0.15 or speedRatio > 0.2 then
+        local tendrilAlpha = math.max(self.intimacy.value * 0.12, speedRatio * 0.1)
+        local tendrilCount = 3 + math.floor(self.intimacy.value * 3)
+        local tendrilLength = 20 + self.intimacy.value * 25
+        drawTendrils(p.x, p.y, 14 * pulse, time, tendrilCount, tendrilLength, r, g, b, tendrilAlpha)
+    end
+
+    -- Organic outer glow (grows with intimacy)
     if self.intimacy.value > 0.2 then
-        local glowIntensity = (self.intimacy.value - 0.2) * 0.8
-        visual_effects.drawEntityGlow(p.x, p.y, 25 * pulse, r, g, b, glowIntensity)
+        local glowIntensity = (self.intimacy.value - 0.2) * 0.6
+        local glowSize = 35 + self.intimacy.value * 20
+        drawOrganicGlow(p.x, p.y, glowSize * pulse, time, 5, r, g, b, glowIntensity * 0.25)
     end
 
-    -- Outer glow ring
-    if self.intimacy.value > 0.3 then
-        local glowAlpha = (self.intimacy.value - 0.3) * 0.12
-        love.graphics.setColor(r, g, b, glowAlpha)
-        love.graphics.circle("fill", p.x, p.y, 35 * pulse)
-        love.graphics.setColor(r, g, b, glowAlpha * 0.5)
-        love.graphics.circle("fill", p.x, p.y, 45 * pulse)
-    end
+    -- Secondary organic glow
+    drawBlob(p.x, p.y, 20 * pulse, time * 0.8, 0.12, 18, r * 0.95, g * 0.95, b, 0.15)
 
-    -- Secondary glow
-    love.graphics.setColor(0.85, 0.88, 0.95, 0.15)
-    love.graphics.circle("fill", p.x, p.y, 18 * pulse)
+    -- Main organic body
+    local size = 14 * pulse
+    drawBlob(p.x, p.y, size, time, wobbleAmount, 20, r, g, b, 0.92)
 
-    -- Player shape
-    love.graphics.setColor(0.92, 0.93, 0.97, 0.95)
-    love.graphics.circle("fill", p.x, p.y, 12)
+    -- Inner layers
+    drawBlob(p.x, p.y, size * 0.65, time * 1.4, wobbleAmount * 0.7, 16, r + 0.08, g + 0.08, b + 0.05, 0.55)
 
-    -- Highlight
-    love.graphics.setColor(1, 1, 1, 0.5)
-    love.graphics.circle("fill", p.x - 3, p.y - 3, 4)
+    -- Bright core
+    drawBlob(p.x, p.y, size * 0.4, time * 1.8, wobbleAmount * 0.5, 12, 1, 1, 1, 0.65)
 
-    -- Inner core
-    love.graphics.setColor(1, 1, 1, 0.6)
-    love.graphics.circle("fill", p.x, p.y, 5)
-
-    -- Core sparkle
-    local sparkle = 0.5 + 0.5 * math.sin(self.syncPulse * 4)
-    love.graphics.setColor(1, 1, 1, 0.3 * sparkle)
-    love.graphics.circle("fill", p.x, p.y, 3)
+    -- Inner sparkle
+    local sparkle = 0.5 + 0.5 * math.sin(time * 4)
+    drawBlob(p.x, p.y, size * 0.2, time * 2.2, 0.25, 10, 1, 1, 1, 0.35 * sparkle)
 end
 
 function Hold:drawEnding()

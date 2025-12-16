@@ -389,14 +389,17 @@ function visual_effects.drawBackground()
 
     love.graphics.clear(r, g, b)
 
-    -- Subtle radial gradient overlay
+    -- Very subtle radial gradient overlay (smooth, many layers)
     local cx, cy = 480, 270
-    local maxRadius = 400
+    local maxRadius = 450
     local accent = currentPreset.accentColor
-    for i = 10, 1, -1 do
-        local ratio = i / 10
+    local steps = 30  -- More steps for smoother gradient
+    for i = steps, 1, -1 do
+        local ratio = i / steps
         local radius = maxRadius * ratio
-        local alpha = 0.02 * (1 - ratio) * (1 + state.intensity * 0.5)
+        -- Much gentler alpha curve - peaks in the middle, fades at edges
+        local falloff = math.sin(ratio * math.pi) * 0.5  -- Smooth bell curve
+        local alpha = 0.008 * falloff * (1 + state.intensity * 0.3)
         love.graphics.setColor(accent[1], accent[2], accent[3], alpha)
         love.graphics.circle("fill", cx, cy, radius)
     end
