@@ -1,5 +1,5 @@
 local scene_manager = require("src.core.scene_manager")
-local effects = require("src.core.effects")
+local theme = require("src.core.theme")
 local audio = require("src.core.audio")
 local debug = require("src.core.debug")
 local input = require("src.core.input")
@@ -42,8 +42,9 @@ function microgame_scene:load()
         return
     end
 
-    -- Initialize background effects
-    effects.init()
+    -- Grade the light for this game's emotional pattern
+    local meta = self.microgame.metadata or {}
+    theme.setMood(meta.emlId)
 
     -- Load and apply settings
     settings.load()
@@ -67,19 +68,6 @@ function microgame_scene:update(dt)
         return
     end
 
-    -- Update background effects
-    effects.update(dt)
-
-    -- Check if microgame has disorientation state and pass it to effects
-    if self.microgame.disorientation and self.microgame.disorientation.value then
-        effects.setDisorientation(self.microgame.disorientation.value)
-    elseif self.microgame.burden and self.microgame.burden.value then
-        -- Support burden-based games (like Weight)
-        effects.setDisorientation(self.microgame.burden.value)
-    else
-        effects.setDisorientation(0)
-    end
-
     -- Update footstep sounds based on movement input (supports gamepad)
     -- Skip if microgame uses slide sounds instead
     if not self.microgame.useSlideInsteadOfFootsteps then
@@ -90,8 +78,7 @@ function microgame_scene:update(dt)
 
     if self.microgame.update then self.microgame:update(dt) end
     if self.microgame.isFinished and self.microgame:isFinished() then
-        effects.reset()
-        scene_manager.setScene(require("src.ui.menu_scene"))
+        scene_manager.switchTo(require("src.ui.menu_scene"))
     end
 end
 
@@ -145,30 +132,35 @@ function microgame_scene:selectPauseOption()
         scene_manager.setScene(settings_scene.new(self))
     elseif option.action == "menu" then
         audio.play("ui_select")
-        effects.reset()
-        scene_manager.setScene(require("src.ui.menu_scene"))
+        scene_manager.switchTo(require("src.ui.menu_scene"))
     end
 end
 
 function microgame_scene:draw()
-    -- Clear screen with dark background
-    love.graphics.clear(0.08, 0.08, 0.1)
-
-    -- Draw background effects first (before microgame)
-    effects.draw()
+    -- Clear screen with the abyss
+    local a = theme.colors.abyss
+    love.graphics.clear(a[1], a[2], a[3])
 
     if self.microgame.draw then self.microgame:draw() end
-
-    -- Draw debug overlay (on top of everything)
-    debug.draw(self.microgame)
+    love.graphics.origin()
+    love.graphics.setBlendMode("alpha")
 
     -- Draw pause overlay if paused
     if self.paused then
         self:drawPauseMenu()
     else
-        love.graphics.setColor(1, 1, 1, 0.6)
-        love.graphics.print("[Esc] pause", 10, love.graphics.getHeight() - 24)
+        local ink = theme.colors.inkFaint
+        local font = theme.font("ui", 13)
+        love.graphics.setFont(font)
+        love.graphics.setColor(ink[1], ink[2], ink[3], 0.55)
+        local hint = input.hasGamepad() and "Start  pause" or "Esc  pause"
+        love.graphics.print(hint, theme.W - font:getWidth(hint) - 18, theme.H - 28)
     end
+end
+
+function microgame_scene:drawOverlay()
+    -- Debug info sits outside the post-processing so it stays legible
+    debug.draw(self.microgame)
 end
 
 function microgame_scene:drawPauseMenu()
@@ -191,13 +183,13 @@ function microgame_scene:drawPauseMenu()
 
     -- Title
     love.graphics.setColor(1, 1, 1)
-    love.graphics.setFont(love.graphics.newFont(24))
+    love.graphics.setFont(theme.font("display", 30))
     local title = "Paused"
     local titleW = love.graphics.getFont():getWidth(title)
     love.graphics.print(title, panelX + (panelW - titleW) / 2, panelY + 20)
 
     -- Options
-    love.graphics.setFont(love.graphics.newFont(18))
+    love.graphics.setFont(theme.font("ui", 18))
     local optionY = panelY + 70
     for i, option in ipairs(pauseOptions) do
         if i == self.pauseSelectedIndex then
@@ -214,7 +206,7 @@ function microgame_scene:drawPauseMenu()
 
     -- Controls hint
     love.graphics.setColor(0.5, 0.5, 0.55)
-    love.graphics.setFont(love.graphics.newFont(12))
+    love.graphics.setFont(theme.font("ui", 12))
     local hasGamepad = input.hasGamepad()
     local hint = hasGamepad and "A: select | B: resume" or "Enter: select | Esc: resume"
     local hintW = love.graphics.getFont():getWidth(hint)

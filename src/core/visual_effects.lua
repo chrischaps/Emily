@@ -1,6 +1,8 @@
 -- Shared visual effects system for microgames
 -- Configurable with presets for different emotional themes
 
+local theme = require("src.core.theme")
+
 local visual_effects = {}
 
 local state = nil
@@ -27,13 +29,18 @@ local config = {
     maxConnectionParticles = 30,
 }
 
--- Presets for different emotional themes
+-- Presets for different emotional themes. Colours come from theme.hues so
+-- every game in a pattern shares one light.
+local function base(hue)
+    return theme.lerpColor(theme.colors.abyss, hue.deep, 0.55)
+end
+
 local presets = {
     -- Intimacy/connection theme (Hold)
     intimacy = {
-        baseColor = { 0.06, 0.06, 0.08 },
-        accentColor = { 0.5, 0.6, 0.8 },
-        warmColor = { 0.8, 0.7, 0.5 },
+        baseColor = base(theme.hues.intimacy),
+        accentColor = { 0.62, 0.70, 0.95 },          -- cool until warmth arrives
+        warmColor = theme.hues.intimacy.light,
         ambientParticles = true,
         ambientDirection = "up",
         ambientSpeed = 8,
@@ -47,9 +54,9 @@ local presets = {
 
     -- Burden/weight theme (Carry, Weight)
     burden = {
-        baseColor = { 0.04, 0.04, 0.05 },
-        accentColor = { 0.4, 0.35, 0.5 },
-        warmColor = { 0.5, 0.4, 0.35 },
+        baseColor = base(theme.hues.burden),
+        accentColor = { 0.78, 0.50, 0.30 },          -- banked embers
+        warmColor = theme.hues.burden.light,
         ambientParticles = true,
         ambientDirection = "down",  -- Particles fall like weight
         ambientSpeed = 15,
@@ -61,11 +68,11 @@ local presets = {
         breatheIntensity = 0.015,
     },
 
-    -- Confusion/disorientation theme (Fog variants)
-    confusion = {
-        baseColor = { 0.08, 0.08, 0.09 },
-        accentColor = { 0.5, 0.5, 0.55 },
-        warmColor = { 0.6, 0.55, 0.5 },
+    -- Disorientation theme (Fog variants)
+    disorientation = {
+        baseColor = base(theme.hues.disorientation),
+        accentColor = theme.hues.disorientation.light,
+        warmColor = { 0.95, 0.80, 0.55 },
         ambientParticles = true,
         ambientDirection = "drift",  -- Random drifting
         ambientSpeed = 5,
@@ -76,7 +83,24 @@ local presets = {
         breatheEnabled = true,
         breatheIntensity = 0.025,
     },
+
+    -- Complicity theme (Ledger)
+    complicity = {
+        baseColor = base(theme.hues.complicity),
+        accentColor = theme.hues.complicity.light,
+        warmColor = theme.hues.complicity.sour,
+        ambientParticles = true,
+        ambientDirection = "drift",
+        ambientSpeed = 3,
+        ambientAlpha = 0.08,
+        trailParticles = true,
+        connectionParticles = false,
+        vignetteRange = { 0.2, 0.5 },
+        breatheEnabled = false,
+        breatheIntensity = 0,
+    },
 }
+presets.confusion = presets.disorientation
 
 local function createParticle(x, y, particleType)
     return {
@@ -172,6 +196,7 @@ function visual_effects.update(dt, gameState)
     local vigLow, vigHigh = currentPreset.vignetteRange[1], currentPreset.vignetteRange[2]
     vignette.targetIntensity = vigLow + (vigHigh - vigLow) * intensity
     vignette.intensity = vignette.intensity + (vignette.targetIntensity - vignette.intensity) * dt * 2
+    theme.setVignette(vignette.intensity)
 
     -- Update color grading
     colorGrade.targetWarmth = warmth
@@ -376,33 +401,32 @@ function visual_effects.spawnBurst(x, y, count, color)
 end
 
 -- Drawing functions
+-- Particles are small lights: an additive halo around a tiny bright core,
+-- so bloom picks them up and nothing bands.
+
+local function drawMote(x, y, size, c, alpha)
+    if alpha <= 0.002 then return end
+    theme.glow(x, y, size * 3.2, c[1], c[2], c[3], alpha * 0.9)
+    love.graphics.setColor(c[1], c[2], c[3], alpha * 0.8)
+    love.graphics.circle("fill", x, y, size * 0.45)
+end
 
 function visual_effects.drawBackground()
     if not initialized then return end
 
-    local base = currentPreset.baseColor
+    local b = currentPreset.baseColor
     local breatheOffset = math.sin(breathe.phase) * breathe.intensity
 
-    local r = base[1] + breatheOffset + colorGrade.warmth * 0.02
-    local g = base[2] + breatheOffset
-    local b = base[3] + breatheOffset - colorGrade.warmth * 0.02
+    local r = b[1] + breatheOffset + colorGrade.warmth * 0.02
+    local g = b[2] + breatheOffset
+    local bl = b[3] + breatheOffset - colorGrade.warmth * 0.02
 
-    love.graphics.clear(r, g, b)
+    love.graphics.clear(r, g, bl)
 
-    -- Very subtle radial gradient overlay (smooth, many layers)
-    local cx, cy = 480, 270
-    local maxRadius = 450
+    -- A faint well of light at the centre, as if lit from far above
     local accent = currentPreset.accentColor
-    local steps = 30  -- More steps for smoother gradient
-    for i = steps, 1, -1 do
-        local ratio = i / steps
-        local radius = maxRadius * ratio
-        -- Much gentler alpha curve - peaks in the middle, fades at edges
-        local falloff = math.sin(ratio * math.pi) * 0.5  -- Smooth bell curve
-        local alpha = 0.008 * falloff * (1 + state.intensity * 0.3)
-        love.graphics.setColor(accent[1], accent[2], accent[3], alpha)
-        love.graphics.circle("fill", cx, cy, radius)
-    end
+    local alpha = 0.05 * (1 + state.intensity * 0.3)
+    theme.glowEllipse(480, 250, 620, 420, 0, accent[1], accent[2], accent[3], alpha)
 end
 
 function visual_effects.drawAmbientParticles()
@@ -410,8 +434,7 @@ function visual_effects.drawAmbientParticles()
 
     local accent = currentPreset.accentColor
     for _, p in ipairs(ambientParticles) do
-        love.graphics.setColor(accent[1], accent[2], accent[3], p.currentAlpha or p.alpha)
-        love.graphics.circle("fill", p.x, p.y, p.size)
+        drawMote(p.x, p.y, p.size, accent, (p.currentAlpha or p.alpha) * 1.6)
     end
 end
 
@@ -419,9 +442,7 @@ function visual_effects.drawTrailParticles()
     if not initialized or not currentPreset.trailParticles then return end
 
     for _, p in ipairs(trailParticles) do
-        local c = p.color or currentPreset.accentColor
-        love.graphics.setColor(c[1], c[2], c[3], p.currentAlpha or 0)
-        love.graphics.circle("fill", p.x, p.y, p.currentSize or p.size)
+        drawMote(p.x, p.y, p.currentSize or p.size, p.color or currentPreset.accentColor, p.currentAlpha or 0)
     end
 end
 
@@ -430,8 +451,7 @@ function visual_effects.drawConnectionParticles()
 
     local accent = currentPreset.accentColor
     for _, p in ipairs(connectionParticles) do
-        love.graphics.setColor(accent[1], accent[2], accent[3], p.currentAlpha or 0)
-        love.graphics.circle("fill", p.x, p.y, p.currentSize or p.size)
+        drawMote(p.x, p.y, p.currentSize or p.size, accent, p.currentAlpha or 0)
     end
 end
 
@@ -439,43 +459,18 @@ function visual_effects.drawBurstParticles()
     if not initialized then return end
 
     for _, p in ipairs(particles) do
-        local c = p.color or currentPreset.accentColor
-        love.graphics.setColor(c[1], c[2], c[3], p.currentAlpha or 0)
-        love.graphics.circle("fill", p.x, p.y, p.currentSize or p.size)
+        drawMote(p.x, p.y, p.currentSize or p.size, p.color or currentPreset.accentColor, (p.currentAlpha or 0) * 1.4)
     end
 end
 
+-- The vignette now lives in the post-processing grade (see update, which
+-- feeds vignette.intensity to theme.setVignette). Kept for API compatibility.
 function visual_effects.drawVignette()
-    if not initialized then return end
-
-    local w, h = 960, 540
-    local cx, cy = w / 2, h / 2
-
-    local cornerSize = 320
-    for i = 1, 15 do
-        local ratio = i / 15
-        local size = cornerSize * (1 - ratio * 0.4)
-        local alpha = vignette.intensity * 0.25 * ratio * ratio
-        love.graphics.setColor(0, 0, 0, alpha)
-
-        love.graphics.circle("fill", 0, 0, size)
-        love.graphics.circle("fill", w, 0, size)
-        love.graphics.circle("fill", 0, h, size)
-        love.graphics.circle("fill", w, h, size)
-    end
 end
 
 function visual_effects.drawEntityGlow(x, y, radius, r, g, b, intensity)
     if not initialized then return end
-
-    local layers = 5
-    for i = layers, 1, -1 do
-        local ratio = i / layers
-        local size = radius * (1 + ratio * 0.8)
-        local alpha = intensity * 0.08 * (1 - ratio * 0.7)
-        love.graphics.setColor(r, g, b, alpha)
-        love.graphics.circle("fill", x, y, size)
-    end
+    theme.glow(x, y, radius * 2.2, r, g, b, intensity * 0.35)
 end
 
 function visual_effects.getScreenOffset()
@@ -503,6 +498,7 @@ function visual_effects.reset()
 end
 
 function visual_effects.cleanup()
+    theme.setVignette(0)
     particles = {}
     connectionParticles = {}
     ambientParticles = {}

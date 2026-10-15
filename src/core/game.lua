@@ -17,6 +17,8 @@ function game.load()
     applySettings()
 
     scene_manager.setScene(require("src.ui.menu_scene"))
+    -- Rise out of the dark on launch
+    scene_manager.fadeIn(1.8)
 end
 
 function game.update(dt)
@@ -25,6 +27,14 @@ end
 
 function game.draw()
     scene_manager.draw()
+end
+
+function game.drawOverlay()
+    scene_manager.drawOverlay()
+end
+
+function game.mousemoved(x, y, dx, dy, istouch)
+    scene_manager.mousemoved(x, y, dx, dy, istouch)
 end
 
 function game.keypressed(key, scancode, isrepeat)

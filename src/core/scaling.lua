@@ -32,13 +32,11 @@ function scaling.resize(windowWidth, windowHeight)
     offsetY = (windowHeight - scaledHeight) / 2
 end
 
+-- Push a transform for drawing directly to the window in virtual coordinates.
+-- The scene itself renders into the light canvas (see theme.lua); this is for
+-- crisp overlays drawn after post-processing.
 function scaling.start()
-    -- Push transform for drawing at virtual resolution
     love.graphics.push()
-
-    -- Clear letterbox areas with black
-    love.graphics.setColor(0, 0, 0, 1)
-    love.graphics.rectangle("fill", 0, 0, actualWidth, actualHeight)
 
     -- Apply transform: translate to center, then scale
     love.graphics.translate(offsetX, offsetY)

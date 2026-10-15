@@ -1,18 +1,37 @@
 local game = require("src.core.game")
 local scaling = require("src.core.scaling")
+local theme = require("src.core.theme")
+local devshot = require("src.core.devshot")
 
 function love.load(...)
+    love.graphics.setDefaultFilter("linear", "linear")
     scaling.init()
+    theme.init()
+    devshot.init()
     if game.load then game.load(...) end
+    devshot.start(require("src.core.scene_manager"))
 end
 
 function love.update(dt)
+    dt = math.min(dt, 1 / 20)  -- a hitch should never teleport anything
+    theme.update(dt)
     if game.update then game.update(dt) end
+    devshot.update(dt)
 end
 
 function love.draw()
-    scaling.start()
+    -- The scene draws into the light canvas at the virtual resolution...
+    theme.beginFrame()
     if game.draw then game.draw() end
+    love.graphics.origin()
+
+    -- ...which is graded, bloomed and presented letterboxed.
+    local ox, oy = scaling.getOffset()
+    theme.endFrame(scaling.getScale(), ox, oy)
+
+    -- Overlays (debug info) stay crisp, outside the post-processing
+    scaling.start()
+    if game.drawOverlay then game.drawOverlay() end
     scaling.stop()
 end
 
@@ -22,6 +41,10 @@ function love.resize(w, h)
 end
 
 function love.keypressed(key, scancode, isrepeat)
+    if love.keyboard.isDown("lshift", "rshift") and key:match("^f[1-4]$") then
+        theme.debugKey(key)
+        return
+    end
     if game.keypressed then game.keypressed(key, scancode, isrepeat) end
 end
 

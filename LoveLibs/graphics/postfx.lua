@@ -15,6 +15,10 @@
                 distortion = { enabled = true, strength = 0.006 },
                 bloom = { enabled = true, threshold = 0.5, intensity = 0.6 },
                 colorGrade = { enabled = true, warmth = 0.1, saturation = 0.1 }
+            }, {
+                canvasFormat = "rgba16f", -- optional: float canvases avoid 8-bit banding
+                msaa = 4,                 -- optional: anti-alias the scene canvas
+                stencil = true            -- optional: allow stencil use while drawing the scene
             })
         end
 
@@ -54,6 +58,8 @@ local blurHorizontalShader = nil
 local blurVerticalShader = nil
 local colorGradeShader = nil
 
+local canvasOptions = {}
+
 -- Public state
 PostFX.bypass = false
 PostFX.debugLevel = 0
@@ -70,7 +76,8 @@ PostFX.config = {
         threshold = 0.50,
         softness = 0.15,
         intensity = 0.6,
-        radius = 3.0
+        radius = 3.0,
+        passes = 1          -- Extra blur iterations widen and soften the glow
     },
     colorGrade = {
         enabled = true,
@@ -219,7 +226,9 @@ local colorGradeSource = [[
 --- @param w number Native width (content resolution)
 --- @param h number Native height (content resolution)
 --- @param config table|nil Optional configuration overrides
-function PostFX.init(w, h, config)
+--- @param options table|nil Canvas options: canvasFormat, msaa, stencil
+function PostFX.init(w, h, config, options)
+    canvasOptions = options or {}
     startTime = love.timer.getTime()
 
     w = w or love.graphics.getWidth()
@@ -230,14 +239,7 @@ function PostFX.init(w, h, config)
         PostFX.mergeConfig(config)
     end
 
-    -- Create canvases
-    local settings = {format = "rgba8", readable = true}
-    mainCanvas = love.graphics.newCanvas(w, h, settings)
-    distortionCanvas = love.graphics.newCanvas(w, h, settings)
-    brightnessCanvas = love.graphics.newCanvas(w, h, settings)
-    blurTempCanvas = love.graphics.newCanvas(w, h, settings)
-    bloomCanvas = love.graphics.newCanvas(w, h, settings)
-    compositeCanvas = love.graphics.newCanvas(w, h, settings)
+    PostFX._createCanvases(w, h)
 
     -- Compile shaders
     local function compile(name, source)
@@ -271,8 +273,19 @@ end
 --- @param w number Native width
 --- @param h number Native height
 function PostFX.resize(w, h)
-    local settings = {format = "rgba8", readable = true}
-    mainCanvas = love.graphics.newCanvas(w, h, settings)
+    PostFX._createCanvases(w, h)
+end
+
+--- Create all pipeline canvases using the options given to init
+function PostFX._createCanvases(w, h)
+    local format = canvasOptions.canvasFormat or "rgba8"
+    if not love.graphics.getCanvasFormats()[format] then
+        print("[PostFX] Canvas format " .. format .. " unsupported, using rgba8")
+        format = "rgba8"
+    end
+    local settings = {format = format}
+    local msaa = math.min(canvasOptions.msaa or 0, love.graphics.getSystemLimits().canvasmsaa or 0)
+    mainCanvas = love.graphics.newCanvas(w, h, {format = format, msaa = msaa})
     distortionCanvas = love.graphics.newCanvas(w, h, settings)
     brightnessCanvas = love.graphics.newCanvas(w, h, settings)
     blurTempCanvas = love.graphics.newCanvas(w, h, settings)
@@ -289,7 +302,7 @@ end
 --- Begin rendering scene to canvas
 function PostFX.beginScene()
     if not mainCanvas then return end
-    love.graphics.setCanvas(mainCanvas)
+    love.graphics.setCanvas({mainCanvas, stencil = canvasOptions.stencil or false})
     love.graphics.clear(0, 0, 0, 1)
 end
 
@@ -400,6 +413,22 @@ function PostFX._applyBloom(sourceCanvas, w, h)
     love.graphics.setShader(blurVerticalShader)
     blurVerticalShader:send("blur_size", cfg.radius / h)
     love.graphics.draw(blurTempCanvas, 0, 0)
+
+    -- Extra iterations, each at a wider radius, for a softer, broader glow
+    for pass = 2, (cfg.passes or 1) do
+        local size = cfg.radius * pass
+        love.graphics.setCanvas(blurTempCanvas)
+        love.graphics.clear(0, 0, 0, 1)
+        love.graphics.setShader(blurHorizontalShader)
+        blurHorizontalShader:send("blur_size", size / w)
+        love.graphics.draw(bloomCanvas, 0, 0)
+
+        love.graphics.setCanvas(bloomCanvas)
+        love.graphics.clear(0, 0, 0, 1)
+        love.graphics.setShader(blurVerticalShader)
+        blurVerticalShader:send("blur_size", size / h)
+        love.graphics.draw(blurTempCanvas, 0, 0)
+    end
 
     -- Composite
     love.graphics.setCanvas(compositeCanvas)

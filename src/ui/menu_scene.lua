@@ -3,6 +3,7 @@ local registry = require("src.microgames.registry")
 local input = require("src.core.input")
 local settings = require("src.core.settings")
 local audio = require("src.core.audio")
+local theme = require("src.core.theme")
 
 local menu_scene = {}
 menu_scene.__index = menu_scene
@@ -27,6 +28,8 @@ function menu_scene:load()
     self.selectedIndex = 1
     self.font = love.graphics.newFont(18)
     self.titleFont = love.graphics.newFont(28)
+
+    theme.setMood("shell")
 
     -- Load settings and init audio
     settings.load()
