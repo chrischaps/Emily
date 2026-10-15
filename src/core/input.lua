@@ -96,4 +96,39 @@ function input.hasGamepad()
     return getGamepad() ~= nil
 end
 
+-- Check if a specific action button is held (for interactions)
+function input.isActionHeld()
+    local gamepad = getGamepad()
+    if love.keyboard.isDown("space") then return true end
+    if gamepad and gamepad:isGamepadDown("a") then return true end
+    return false
+end
+
+-- Get raw left stick position (for circular motion detection)
+-- Returns x, y (-1 to 1), and whether stick is active (past deadzone)
+function input.getLeftStick()
+    local gamepad = getGamepad()
+    if gamepad then
+        local lx = gamepad:getGamepadAxis("leftx") or 0
+        local ly = gamepad:getGamepadAxis("lefty") or 0
+        local magnitude = math.sqrt(lx * lx + ly * ly)
+        local active = magnitude > deadzone
+        return lx, ly, active, magnitude
+    end
+
+    -- Keyboard fallback - use WASD/arrows
+    local kx, ky = 0, 0
+    if love.keyboard.isDown("left", "a") then kx = kx - 1 end
+    if love.keyboard.isDown("right", "d") then kx = kx + 1 end
+    if love.keyboard.isDown("up", "w") then ky = ky - 1 end
+    if love.keyboard.isDown("down", "s") then ky = ky + 1 end
+
+    local magnitude = math.sqrt(kx * kx + ky * ky)
+    if magnitude > 0 then
+        kx, ky = kx / magnitude, ky / magnitude
+    end
+
+    return kx, ky, magnitude > 0, math.min(1, magnitude)
+end
+
 return input
