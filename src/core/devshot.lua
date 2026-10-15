@@ -12,6 +12,8 @@
 -- out    absolute PNG path
 -- ending seconds after start to force the shared ending card
 -- endtext text to show on it (use / for a line break)
+-- size   WxH window size, to check letterboxing
+-- perf   1 to turn vsync off and report frame times
 
 local devshot = {}
 
@@ -55,6 +57,16 @@ function devshot.init()
         local key, a, b = item:match("^(.-)@([%d%.]+)%-([%d%.]+)$")
         if key then holds[#holds + 1] = { key = key, from = tonumber(a), to = tonumber(b) } end
     end
+    if spec.size then
+        local w, h = spec.size:match("(%d+)x(%d+)")
+        love.window.setMode(tonumber(w), tonumber(h), { resizable = true, vsync = 1 })
+        love.resize(tonumber(w), tonumber(h))
+    end
+    if spec.perf then
+        love.window.setVSync(0)
+        spec.frames, spec.worst = 0, 0
+    end
+
     for at in (spec.at or "2"):gmatch("[^,]+") do
         shots[#shots + 1] = tonumber(at)
     end
@@ -131,7 +143,16 @@ function devshot.update(dt)
         end
     end
 
+    if spec.perf and clock > 1 then
+        spec.frames = spec.frames + 1
+        spec.worst = math.max(spec.worst, dt)
+    end
+
     if quitAt and clock >= quitAt then
+        if spec.perf then
+            print(string.format("[devshot] %d frames in %.1fs: %.0f fps avg, worst frame %.1f ms",
+                spec.frames, clock - 1, spec.frames / (clock - 1), spec.worst * 1000))
+        end
         love.event.quit()
     end
 end
