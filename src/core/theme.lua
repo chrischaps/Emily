@@ -224,6 +224,37 @@ function theme.glowEllipse(x, y, rx, ry, rotation, r, g, b, a, mode)
     love.graphics.setBlendMode(prevMode, prevAlpha)
 end
 
+local holeImage = nil
+
+local function buildHoleImage()
+    -- Clear in the middle, fully dark at the rim, with a long soft falloff
+    local format = love.graphics.getImageFormats()["rgba16f"] and "rgba16f" or "rgba8"
+    local data = love.image.newImageData(GLOW_SIZE, GLOW_SIZE, format)
+    local c = (GLOW_SIZE - 1) / 2
+    data:mapPixel(function(x, y)
+        local dx, dy = (x - c) / c, (y - c) / c
+        local d = math.sqrt(dx * dx + dy * dy)
+        local t = math.max(0, math.min(1, (d - 0.35) / 0.65))
+        return 1, 1, 1, t * t * (3 - 2 * t)
+    end)
+    holeImage = love.graphics.newImage(data)
+    holeImage:setFilter("linear", "linear")
+end
+
+--- Darkness everywhere except a soft-edged window of `radius` around x, y
+function theme.darknessAround(x, y, radius, r, g, b, a)
+    if not holeImage then buildHoleImage() end
+    love.graphics.setColor(r, g, b, a)
+    local s = (radius * 2) / GLOW_SIZE
+    love.graphics.draw(holeImage, x, y, 0, s, s, GLOW_SIZE / 2, GLOW_SIZE / 2)
+    -- Fill everything outside the window's square
+    local x0, y0, x1, y1 = x - radius, y - radius, x + radius, y + radius
+    love.graphics.rectangle("fill", -10, -10, theme.W + 20, y0 + 10)
+    love.graphics.rectangle("fill", -10, y1, theme.W + 20, theme.H - y1 + 10)
+    love.graphics.rectangle("fill", -10, y0, x0 + 10, y1 - y0)
+    love.graphics.rectangle("fill", x1, y0, theme.W - x1 + 10, y1 - y0)
+end
+
 --- A living light: a halo, a body and a bright core in one call
 function theme.lightOrb(x, y, radius, hue, intensity, time)
     intensity = intensity or 1

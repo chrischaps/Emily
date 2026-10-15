@@ -3,6 +3,8 @@ local audio = require("src.core.audio")
 local music = require("src.core.music")
 local input = require("src.core.input")
 local visual_effects = require("src.core.visual_effects")
+local theme = require("src.core.theme")
+local FogVisuals = require("src.microgames.fog.visuals")
 
 local FogExit = setmetatable({}, { __index = MicroGameBase })
 FogExit.__index = FogExit
@@ -73,6 +75,7 @@ function FogExit.new()
     }
     local self = MicroGameBase:new(metadata)
     setmetatable(self, FogExit)
+    self.fx = FogVisuals.new({ desaturate = 0.05 })  -- the HUD must stay garish
 
     -- Screen dimensions
     self.screenW = 960
@@ -196,10 +199,6 @@ function FogExit.new()
     self.time = 0
 
     -- Fonts
-    self.font = love.graphics.newFont(18)
-    self.smallFont = love.graphics.newFont(14)
-    self.uiFont = love.graphics.newFont(16)
-    self.bigFont = love.graphics.newFont(24)
 
     return self
 end
@@ -817,9 +816,10 @@ function FogExit:update(dt)
         intensity = self.disorientation.value,
         warmth = 0,
         entities = {
-            player = { x = self.player.x, y = self.player.y, color = {0.9, 0.9, 0.95} },
+            player = { x = self.player.x, y = self.player.y, color = theme.hues.disorientation.light },
         },
     })
+    self.fx:update(dt, self.disorientation.value)
 end
 
 function FogExit:draw()
@@ -840,60 +840,22 @@ function FogExit:draw()
     -- Draw trail particles in world space
     visual_effects.drawTrailParticles()
 
-    -- Draw bounds
-    love.graphics.setColor(0.25, 0.25, 0.3)
-    love.graphics.setLineWidth(2)
-    love.graphics.rectangle("line",
-        self.bounds.left - 5, self.bounds.top - 5,
-        self.bounds.right - self.bounds.left + 10,
-        self.bounds.bottom - self.bounds.top + 10)
-
-    -- Draw inert landmarks
-    love.graphics.setColor(0.3, 0.3, 0.35)
-    for _, lm in ipairs(self.landmarks) do
-        love.graphics.rectangle("fill", lm.x - 15, lm.y - 15, 30, 30)
+    -- The room and its lanterns
+    self.fx:drawRoom(self.bounds)
+    for i, lm in ipairs(self.landmarks) do
+        self.fx:drawLantern(lm.x, lm.y, i)
     end
 
-    -- Draw exit (prominently)
-    local exitPulse = 0.85 + 0.15 * math.sin(self.time * 3)
-    local exitR, exitG, exitB = 0.3, 0.7, 0.4
+    -- The exit: the loudest, most certain thing in a quiet, uncertain world
+    self:drawExit()
 
-    -- Exit glow
-    love.graphics.setColor(exitR, exitG, exitB, 0.15)
-    love.graphics.circle("fill", self.exit.x, self.exit.y, self.exit.radius + 15)
-
-    -- Exit main
-    love.graphics.setColor(exitR * exitPulse, exitG * exitPulse, exitB * exitPulse, 0.8)
-    love.graphics.circle("fill", self.exit.x, self.exit.y, self.exit.radius)
-
-    -- Exit label
-    love.graphics.setFont(self.uiFont)
-    love.graphics.setColor(1, 1, 1, 0.9)
-    local exitText = "EXIT"
-    local tw = self.uiFont:getWidth(exitText)
-    love.graphics.print(exitText, self.exit.x - tw/2, self.exit.y - 8)
-
-    -- Arrow pointing to exit
-    love.graphics.setColor(0.5, 0.8, 0.5, 0.5 + 0.3 * math.sin(self.time * 4))
-    local arrowX = self.exit.x - 70
-    love.graphics.polygon("fill",
-        arrowX, self.exit.y,
-        arrowX - 15, self.exit.y - 10,
-        arrowX - 15, self.exit.y + 10)
-
-    -- Draw player
-    local playerAlpha = lerp(1, 0.8, dis * 0.3)
-    love.graphics.setColor(0.9, 0.9, 0.95, playerAlpha)
-    love.graphics.rectangle("fill", self.player.x - 10, self.player.y - 10, 20, 20)
+    -- You
+    self.fx:drawPlayer(self.player.x, self.player.y, lerp(1, 0.8, dis * 0.3))
 
     love.graphics.pop()
 
-    -- Draw fog overlay
-    if dis > 0.15 then
-        local fogAlpha = dis * 0.1
-        love.graphics.setColor(0.5, 0.5, 0.55, fogAlpha)
-        love.graphics.rectangle("fill", 0, 0, 960, 540)
-    end
+    -- Haze (thinner here: the exit must always be visible)
+    self.fx:drawFog(camX, camY)
 
     -- Draw Gamey UI
     self:drawUI()
@@ -918,54 +880,91 @@ function FogExit:draw()
     end
 end
 
+local NEON = { 0.35, 1.0, 0.5 }
+local GOLD = { 1.0, 0.82, 0.25 }
+
+function FogExit:drawExit()
+    local x, y, r = self.exit.x, self.exit.y, self.exit.radius
+    local buzz = 0.9 + 0.1 * math.sin(self.time * 3) + ((math.sin(self.time * 31) > 0.97) and -0.3 or 0)
+    theme.glow(x, y, r * 4, NEON[1], NEON[2], NEON[3], 0.30 * buzz)
+    theme.glow(x, y, r * 1.6, NEON[1], NEON[2], NEON[3], 0.55 * buzz)
+    love.graphics.setColor(NEON[1] * 0.25, NEON[2] * 0.25, NEON[3] * 0.25, 0.9)
+    love.graphics.circle("fill", x, y, r, 48)
+    love.graphics.setLineWidth(3)
+    love.graphics.setColor(NEON[1], NEON[2], NEON[3], buzz)
+    love.graphics.circle("line", x, y, r, 48)
+    love.graphics.setLineWidth(1)
+
+    local font = theme.font("uiBold", 18)
+    love.graphics.setFont(font)
+    love.graphics.setColor(0.9, 1, 0.92, buzz)
+    local tw = font:getWidth("EXIT")
+    love.graphics.print("EXIT", x - tw / 2, y - font:getHeight() / 2)
+
+    -- Arrow, insisting
+    local bob = math.sin(self.time * 4) * 4
+    local ax = x - r - 34 + bob
+    local a = 0.6 + 0.4 * math.sin(self.time * 4)
+    theme.glow(ax - 8, y, 24, NEON[1], NEON[2], NEON[3], 0.35 * a)
+    love.graphics.setColor(NEON[1], NEON[2], NEON[3], a)
+    love.graphics.polygon("fill", ax, y, ax - 16, y - 11, ax - 16, y + 11)
+end
+
 function FogExit:drawUI()
+    -- The game-show HUD: bright, saturated, and certain of nothing
+    local bold = theme.font("uiBold", 18)
+    local small = theme.font("uiBold", 12)
+
     -- Coin counter (top right)
-    love.graphics.setFont(self.uiFont)
-    love.graphics.setColor(0.9, 0.8, 0.3, 0.9)
-    local coinText = string.format("COINS: %d", math.floor(self.ui.coinsDisplay))
-    love.graphics.print(coinText, 960 - 120, 20)
+    local coinText = string.format("%d", math.floor(self.ui.coinsDisplay))
+    love.graphics.setFont(bold)
+    local cw = bold:getWidth(coinText)
+    local cx = 960 - 36 - cw
+    theme.glow(cx - 16, 31, 22, GOLD[1], GOLD[2], GOLD[3], 0.6)
+    love.graphics.setColor(GOLD[1], GOLD[2], GOLD[3], 1)
+    love.graphics.circle("fill", cx - 16, 31, 8, 24)
+    love.graphics.setColor(1, 0.95, 0.7, 1)
+    love.graphics.print(coinText, cx, 20)
 
     -- Progress bar (top center)
-    local barWidth = 200
-    local barHeight = 16
+    local barWidth, barHeight = 220, 12
     local barX = (960 - barWidth) / 2
-    local barY = 20
-
-    -- Bar background
-    love.graphics.setColor(0.2, 0.2, 0.25, 0.8)
-    love.graphics.rectangle("fill", barX, barY, barWidth, barHeight)
-
-    -- Bar fill
-    local fillColor = { 0.3, 0.6, 0.4 }
+    local barY = 24
+    local fillColor = NEON
     if self.phase == "doubt" then
-        fillColor = { 0.6, 0.6, 0.3 }
+        fillColor = { 1.0, 0.85, 0.25 }
     elseif self.phase == "absurdity" then
-        fillColor = { 0.6, 0.4, 0.3 }
+        fillColor = { 1.0, 0.45, 0.3 }
     end
-    love.graphics.setColor(fillColor[1], fillColor[2], fillColor[3], 0.9)
-    love.graphics.rectangle("fill", barX + 2, barY + 2, (barWidth - 4) * self.ui.progressBar, barHeight - 4)
-
-    -- Bar label
-    love.graphics.setColor(0.8, 0.8, 0.8, 0.7)
-    love.graphics.setFont(self.smallFont)
-    love.graphics.print("PROGRESS", barX, barY + barHeight + 4)
+    love.graphics.setColor(0.08, 0.1, 0.12, 0.9)
+    love.graphics.rectangle("fill", barX, barY, barWidth, barHeight, 6, 6)
+    local fw = (barWidth - 4) * self.ui.progressBar
+    if fw > 1 then
+        theme.glowEllipse(barX + 2 + fw / 2, barY + barHeight / 2, fw / 2 + 20, 18, 0,
+            fillColor[1], fillColor[2], fillColor[3], 0.35)
+        love.graphics.setColor(fillColor[1], fillColor[2], fillColor[3], 1)
+        love.graphics.rectangle("fill", barX + 2, barY + 2, fw, barHeight - 4, 4, 4)
+    end
+    love.graphics.setFont(small)
+    love.graphics.setColor(0.85, 0.9, 0.9, 0.75)
+    love.graphics.print("PROGRESS", barX, barY + barHeight + 6)
 
     -- Messages (center-right area)
-    love.graphics.setFont(self.uiFont)
+    love.graphics.setFont(bold)
     for _, msg in ipairs(self.ui.messages) do
-        love.graphics.setColor(0.9, 0.9, 0.8, msg.alpha * 0.9)
-        local w = self.uiFont:getWidth(msg.text)
+        love.graphics.setColor(1, 1, 0.85, msg.alpha)
+        local w = bold:getWidth(msg.text)
         love.graphics.print(msg.text, 960 - w - 30, 80 + msg.y)
     end
 
-    -- Attempt counter (subtle, bottom right)
-    love.graphics.setFont(self.smallFont)
-    love.graphics.setColor(0.4, 0.4, 0.45, 0.6)
-    love.graphics.print(string.format("Attempts: %d", self.exit.attemptCount), 960 - 100, 540 - 30)
+    -- Attempt counter (subtle, bottom right, above the pause hint)
+    local faint = theme.colors.inkFaint
+    love.graphics.setFont(theme.font("ui", 13))
+    love.graphics.setColor(faint[1], faint[2], faint[3], 0.6)
+    love.graphics.print(string.format("Attempts: %d", self.exit.attemptCount), 960 - 104, 540 - 52)
 
     -- Instructions (bottom left)
-    love.graphics.setColor(0.4, 0.4, 0.45)
-    love.graphics.print("WASD to move. Reach the EXIT.", 20, 490)
+    self.fx:drawHint("WASD to move. Reach the EXIT.")
 end
 
 return { new = FogExit.new }

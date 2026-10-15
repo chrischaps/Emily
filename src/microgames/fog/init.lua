@@ -3,6 +3,8 @@ local audio = require("src.core.audio")
 local music = require("src.core.music")
 local input = require("src.core.input")
 local visual_effects = require("src.core.visual_effects")
+local theme = require("src.core.theme")
+local FogVisuals = require("src.microgames.fog.visuals")
 
 local Fog = setmetatable({}, { __index = MicroGameBase })
 Fog.__index = Fog
@@ -33,6 +35,7 @@ function Fog.new()
     }
     local self = MicroGameBase:new(metadata)
     setmetatable(self, Fog)
+    self.fx = FogVisuals.new()
 
     -- Player state
     self.player = {
@@ -123,8 +126,6 @@ function Fog.new()
     -- Time tracking
     self.time = 0
 
-    self.font = love.graphics.newFont(18)
-    self.smallFont = love.graphics.newFont(14)
 
     return self
 end
@@ -494,9 +495,10 @@ function Fog:update(dt)
         intensity = self.disorientation.value,
         warmth = 0,
         entities = {
-            player = { x = self.player.x, y = self.player.y, color = {0.9, 0.9, 0.95} },
+            player = { x = self.player.x, y = self.player.y, color = theme.hues.disorientation.light },
         },
     })
+    self.fx:update(dt, self.disorientation.value)
 end
 
 function Fog:draw()
@@ -524,40 +526,17 @@ function Fog:draw()
     -- Draw trail particles in world space
     visual_effects.drawTrailParticles()
 
-    -- Draw bounds (walls)
-    love.graphics.setColor(0.25, 0.25, 0.3)
-    love.graphics.setLineWidth(3)
-    love.graphics.rectangle("line",
-        self.bounds.left - 5,
-        self.bounds.top - 5,
-        self.bounds.right - self.bounds.left + 10,
-        self.bounds.bottom - self.bounds.top + 10)
-
-    -- Draw landmarks (anchors of false certainty)
-    love.graphics.setColor(0.3, 0.3, 0.35)
-    for _, landmark in ipairs(self.landmarks) do
-        love.graphics.rectangle("fill", landmark.x - 15, landmark.y - 15, 30, 30)
+    -- The room, its lanterns (anchors of false certainty), and you
+    self.fx:drawRoom(self.bounds)
+    for i, landmark in ipairs(self.landmarks) do
+        self.fx:drawLantern(landmark.x, landmark.y, i)
     end
-
-    -- Draw player
-    local playerAlpha = lerp(1, 0.7, dis * 0.5)
-    love.graphics.setColor(0.9, 0.9, 0.95, playerAlpha)
-    love.graphics.rectangle("fill", self.player.x - 10, self.player.y - 10, 20, 20)
+    self.fx:drawPlayer(self.player.x, self.player.y, lerp(1, 0.7, dis * 0.5))
 
     love.graphics.pop()
 
-    -- Draw fog overlay based on disorientation
-    if dis > 0.1 then
-        local fogAlpha = dis * 0.15
-        love.graphics.setColor(0.5, 0.5, 0.55, fogAlpha)
-        love.graphics.rectangle("fill", 0, 0, 960, 540)
-    end
-
-    -- Draw vignette at higher disorientation
-    if dis > 0.4 then
-        local vignetteAlpha = (dis - 0.4) * 0.4
-        self:drawVignette(vignetteAlpha)
-    end
+    -- Haze thickens with disorientation (the vignette lives in the grade)
+    self.fx:drawFog(camX, camY)
 
     -- Draw end sequence
     if self.endState.fading then
@@ -566,29 +545,7 @@ function Fog:draw()
     end
 
     -- Minimal UI (no disorientation indicator shown to player)
-    love.graphics.setFont(self.smallFont)
-    love.graphics.setColor(0.4, 0.4, 0.45)
-    love.graphics.print("WASD or Arrow keys to move", 20, 490)
-end
-
-function Fog:drawVignette(alpha)
-    -- Simple vignette effect using gradient rectangles
-    local steps = 20
-    for i = 1, steps do
-        local t = i / steps
-        local a = alpha * t * t
-        love.graphics.setColor(0.05, 0.05, 0.08, a)
-
-        local thickness = 30 + (steps - i) * 5
-        -- Top
-        love.graphics.rectangle("fill", 0, 0, 960, thickness * t)
-        -- Bottom
-        love.graphics.rectangle("fill", 0, 540 - thickness * t, 960, thickness * t)
-        -- Left
-        love.graphics.rectangle("fill", 0, 0, thickness * t, 540)
-        -- Right
-        love.graphics.rectangle("fill", 960 - thickness * t, 0, thickness * t, 540)
-    end
+    self.fx:drawHint("WASD or arrow keys to move")
 end
 
 return { new = Fog.new }

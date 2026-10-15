@@ -3,6 +3,8 @@ local audio = require("src.core.audio")
 local music = require("src.core.music")
 local input = require("src.core.input")
 local visual_effects = require("src.core.visual_effects")
+local theme = require("src.core.theme")
+local FogVisuals = require("src.microgames.fog.visuals")
 
 local FogAnchors = setmetatable({}, { __index = MicroGameBase })
 FogAnchors.__index = FogAnchors
@@ -22,6 +24,12 @@ local function clamp(val, min, max)
     return math.max(min, math.min(max, val))
 end
 
+local anchorColors = {
+    stable = { 0.45, 0.95, 0.82 },     -- calm teal
+    degraded = { 0.90, 0.82, 0.48 },   -- guttering khaki
+    corrupted = { 0.80, 0.42, 0.66 },  -- a sick mauve
+}
+
 local function dist(x1, y1, x2, y2)
     local dx, dy = x2 - x1, y2 - y1
     return math.sqrt(dx * dx + dy * dy)
@@ -37,6 +45,7 @@ function FogAnchors.new()
     }
     local self = MicroGameBase:new(metadata)
     setmetatable(self, FogAnchors)
+    self.fx = FogVisuals.new()
 
     -- Screen dimensions
     self.screenW = 960
@@ -143,8 +152,6 @@ function FogAnchors.new()
     self.time = 0
 
     -- Fonts
-    self.font = love.graphics.newFont(18)
-    self.smallFont = love.graphics.newFont(14)
 
     return self
 end
@@ -619,9 +626,10 @@ function FogAnchors:update(dt)
         intensity = self.disorientation.value,
         warmth = 0,
         entities = {
-            player = { x = self.player.x, y = self.player.y, color = {0.9, 0.9, 0.95} },
+            player = { x = self.player.x, y = self.player.y, color = theme.hues.disorientation.light },
         },
     })
+    self.fx:update(dt, self.disorientation.value)
 end
 
 function FogAnchors:draw()
@@ -642,69 +650,33 @@ function FogAnchors:draw()
     -- Draw trail particles in world space
     visual_effects.drawTrailParticles()
 
-    -- Draw bounds
-    love.graphics.setColor(0.25, 0.25, 0.3)
-    love.graphics.setLineWidth(3)
-    love.graphics.rectangle("line",
-        self.bounds.left - 5,
-        self.bounds.top - 5,
-        self.bounds.right - self.bounds.left + 10,
-        self.bounds.bottom - self.bounds.top + 10)
-
-    -- Draw inert landmarks (false confidence)
-    love.graphics.setColor(0.3, 0.3, 0.35)
-    for _, landmark in ipairs(self.landmarks) do
-        love.graphics.rectangle("fill", landmark.x - 15, landmark.y - 15, 30, 30)
+    -- The room and its inert lanterns (false confidence)
+    self.fx:drawRoom(self.bounds)
+    for i, landmark in ipairs(self.landmarks) do
+        self.fx:drawLantern(landmark.x, landmark.y, i)
     end
 
-    -- Draw anchors
-    for _, anchor in ipairs(self.anchors) do
-        local r, g, b, a = 0.4, 0.5, 0.6, 0.6
-
-        if anchor.state == "stable" then
-            r, g, b = 0.3, 0.6, 0.5
-        elseif anchor.state == "degraded" then
-            r, g, b = 0.5, 0.5, 0.4
-        elseif anchor.state == "corrupted" then
-            r, g, b = 0.5, 0.35, 0.4
-        end
-
-        -- Pulsing effect
-        local pulse = 0.8 + 0.2 * math.sin(self.time * 2)
-        love.graphics.setColor(r * pulse, g * pulse, b * pulse, a)
-        love.graphics.circle("fill", anchor.x, anchor.y, 20)
-
-        -- Subtle radius indicator
-        love.graphics.setColor(r, g, b, 0.15)
-        love.graphics.circle("line", anchor.x, anchor.y, anchor.radius)
+    -- Anchors: warm, steady lights that decay. Stable ones are calm teal;
+    -- degraded ones gutter; corrupted ones sour and pulse off the beat.
+    for i, anchor in ipairs(self.anchors) do
+        self:drawAnchor(anchor, i)
     end
 
-    -- Draw player
-    local playerAlpha = lerp(1, 0.75, dis * 0.4)
-    love.graphics.setColor(0.9, 0.9, 0.95, playerAlpha)
-    love.graphics.rectangle("fill", self.player.x - 10, self.player.y - 10, 20, 20)
-
-    -- Stabilization visual feedback
+    -- You, held steady for a moment when an anchor works
+    self.fx:drawPlayer(self.player.x, self.player.y, lerp(1, 0.75, dis * 0.4))
     if self.stabilization.active then
-        local stabAlpha = self.stabilization.strength * 0.3
-        love.graphics.setColor(0.5, 0.7, 0.6, stabAlpha)
-        love.graphics.circle("line", self.player.x, self.player.y, 30)
+        local s = self.stabilization.strength
+        local c = anchorColors.stable
+        theme.glow(self.player.x, self.player.y, 48, c[1], c[2], c[3], s * 0.25)
+        love.graphics.setColor(c[1], c[2], c[3], s * 0.35)
+        love.graphics.setLineWidth(1)
+        love.graphics.circle("line", self.player.x, self.player.y, 26 + 4 * math.sin(self.time * 3), 40)
     end
 
     love.graphics.pop()
 
-    -- Draw fog overlay
-    if dis > 0.1 then
-        local fogAlpha = dis * 0.12
-        love.graphics.setColor(0.5, 0.5, 0.55, fogAlpha)
-        love.graphics.rectangle("fill", 0, 0, 960, 540)
-    end
-
-    -- Draw vignette at higher disorientation
-    if dis > 0.35 then
-        local vignetteAlpha = (dis - 0.35) * 0.5
-        self:drawVignette(vignetteAlpha)
-    end
+    -- Haze thickens with disorientation (the vignette lives in the grade)
+    self.fx:drawFog(camX, camY)
 
     -- Draw end sequence
     if self.endState.fading then
@@ -713,24 +685,35 @@ function FogAnchors:draw()
     end
 
     -- Minimal UI
-    love.graphics.setFont(self.smallFont)
-    love.graphics.setColor(0.4, 0.4, 0.45)
-    love.graphics.print("WASD to move. Seek the anchors.", 20, 490)
+    self.fx:drawHint("WASD to move. Seek the anchors.")
 end
 
-function FogAnchors:drawVignette(alpha)
-    local steps = 15
-    for i = 1, steps do
-        local t = i / steps
-        local a = alpha * t * t
-        love.graphics.setColor(0.05, 0.05, 0.08, a)
-
-        local thickness = 25 + (steps - i) * 4
-        love.graphics.rectangle("fill", 0, 0, 960, thickness * t)
-        love.graphics.rectangle("fill", 0, 540 - thickness * t, 960, thickness * t)
-        love.graphics.rectangle("fill", 0, 0, thickness * t, 540)
-        love.graphics.rectangle("fill", 960 - thickness * t, 0, thickness * t, 540)
+function FogAnchors:drawAnchor(anchor, i)
+    local t = self.time
+    local c = anchorColors[anchor.state] or anchorColors.stable
+    local pulse
+    if anchor.state == "stable" then
+        pulse = 0.85 + 0.15 * math.sin(t * 1.6 + i)
+    elseif anchor.state == "degraded" then
+        -- guttering: an uneven flicker
+        pulse = 0.65 + 0.2 * math.sin(t * 7.3 + i) * math.sin(t * 2.1 + i * 3)
+    else
+        -- corrupted: a pulse that lands on the wrong beat
+        local beat = (t * 1.37 + i * 0.4) % 1
+        pulse = 0.5 + 0.45 * math.exp(-beat * 9)
     end
+
+    -- The reach of its influence
+    love.graphics.setLineWidth(1)
+    love.graphics.setColor(c[1], c[2], c[3], 0.10 * pulse)
+    love.graphics.circle("line", anchor.x, anchor.y, anchor.radius, 64)
+    theme.glow(anchor.x, anchor.y, anchor.radius * 0.9, c[1], c[2], c[3], 0.06 * pulse)
+
+    -- The light itself
+    theme.glow(anchor.x, anchor.y, 70, c[1], c[2], c[3], 0.28 * pulse)
+    theme.blob(anchor.x, anchor.y, 13, t * (anchor.state == "corrupted" and 2.2 or 0.8) + i,
+        anchor.state == "corrupted" and 0.28 or 0.1, 24, c[1], c[2], c[3], 0.75 * pulse)
+    theme.glow(anchor.x, anchor.y, 16, 1, 1, 1, 0.45 * pulse)
 end
 
 return { new = FogAnchors.new }

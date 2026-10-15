@@ -1,6 +1,7 @@
 local MicroGameBase = require("src.core.microgame_base")
 local input = require("src.core.input")
 local visual_effects = require("src.core.visual_effects")
+local theme = require("src.core.theme")
 
 local Weight = setmetatable({}, { __index = MicroGameBase })
 Weight.__index = Weight
@@ -88,10 +89,8 @@ function Weight.new()
         fadeAlpha = 0
     }
 
-    -- Fonts
-    self.font = love.graphics.newFont(16)
-    self.messageFont = love.graphics.newFont(24)
-    self.endFont = love.graphics.newFont(20)
+    -- How warmly the centre calls you back (eased)
+    self.centerCall = 0
 
     -- Time tracking
     self.time = 0
@@ -162,12 +161,17 @@ function Weight:update(dt)
     -- Check for end condition (at center, standing still)
     self:checkEndCondition(dt)
 
+    -- The heavier it gets, the harder it is for anything to shine
+    local b = math.min(1, self.burden.value)
+    theme.setModifiers({ bloom_threshold = b * 0.18, bloom_intensity = -b * 0.25, saturation = -b * 0.25 })
+    self.centerCall = theme.approach(self.centerCall, self.endState.hasLeftCenter and 1 or 0, 0.8, dt)
+
     -- Update visual effects (intensity = burden level)
     visual_effects.update(dt, {
         intensity = self.burden.value,
         warmth = 0,
         entities = {
-            player = { x = self.player.x, y = self.player.y, color = {0.9, 0.85, 0.8} },
+            player = { x = self.player.x, y = self.player.y, color = theme.hues.burden.light },
         },
     })
 end
@@ -410,6 +414,8 @@ end
 
 function Weight:draw()
     local burden = math.min(1.0, self.burden.value)
+    local t = self.time
+    local hue = theme.hues.burden
 
     -- Get screen shake offset
     local shakeX, shakeY = visual_effects.getScreenOffset()
@@ -422,65 +428,80 @@ function Weight:draw()
     visual_effects.drawAmbientParticles()
     visual_effects.drawTrailParticles()
 
-    -- Draw cleansing zones
-    love.graphics.setColor(0.2, 0.5, 0.3, 0.4)
-    for _, zone in ipairs(self.cleansingZones) do
-        love.graphics.circle("fill", zone.x, zone.y, zone.r)
+    -- The centre: a banked hearth that glows more once you have wandered
+    local cx, cy = self.screenW / 2, self.screenH / 2
+    local call = self.centerCall * (0.75 + 0.25 * math.sin(t * 0.9))
+    theme.glow(cx, cy, 90, hue.light[1], hue.light[2], hue.light[3], 0.05 + 0.10 * call)
+    love.graphics.setLineWidth(1)
+    love.graphics.setColor(hue.light[1], hue.light[2], hue.light[3], 0.10 + 0.20 * call)
+    love.graphics.circle("line", cx, cy, 40, 64)
+
+    -- Warm pools where burdens can be set down
+    for i, zone in ipairs(self.cleansingZones) do
+        local near = dist(self.player.x, self.player.y, zone.x, zone.y) < zone.r + 15
+        local shimmer = 0.85 + 0.15 * math.sin(t * 1.3 + i * 2)
+        local a = (near and 1 or 0.7) * shimmer
+        theme.glowEllipse(zone.x, zone.y, zone.r * 2.6, zone.r * 1.9, 0, hue.core[1], hue.core[2], hue.core[3], 0.16 * a)
+        theme.blob(zone.x, zone.y, zone.r * 0.92, t * 0.4 + i, 0.06, 32,
+            hue.core[1] * 0.55, hue.core[2] * 0.45, hue.core[3] * 0.3, 0.30 * a)
+        theme.glow(zone.x, zone.y, zone.r * 0.9, hue.core[1], hue.core[2], hue.core[3], 0.35 * a)
     end
 
-    -- Draw center marker (end zone)
-    love.graphics.setColor(0.3, 0.3, 0.4, 0.3)
-    love.graphics.circle("line", self.screenW / 2, self.screenH / 2, 40)
-
-    -- Draw shadows
-    for _, shadow in ipairs(self.shadows) do
-        local alpha = shadow.opacity * 0.7
-        if shadow.permanent then
-            love.graphics.setColor(0.1, 0.05, 0.15, alpha)
-        elseif shadow.state == "attached" then
-            love.graphics.setColor(0.15, 0.1, 0.2, alpha)
-        elseif shadow.state == "following" then
-            love.graphics.setColor(0.2, 0.15, 0.25, alpha)
-        else
-            love.graphics.setColor(0.25, 0.2, 0.3, alpha)
-        end
-        love.graphics.circle("fill", shadow.x, shadow.y, 12)
-    end
-
-    -- Draw player with deformation based on burden
+    -- You: an ember that sags, dims and breathes more slowly as it is weighed down
     local sx = 1 - burden * 0.2
     local sy = 1 + burden * 0.25
-    local rotation = math.sin(self.time * 2) * burden * 0.05
+    local rotation = math.sin(t * 2) * burden * 0.05
+    local breath = 0.5 + 0.5 * math.sin(t * (2.4 - burden * 1.6))
+    local brightness = (1 - burden * 0.55) * (0.9 + 0.1 * breath)
 
     love.graphics.push()
-    love.graphics.translate(self.player.x, self.player.y)
+    love.graphics.translate(self.player.x, self.player.y + burden * 3)
     love.graphics.rotate(rotation)
     love.graphics.scale(sx, sy)
-    love.graphics.setColor(0.9, 0.85, 0.8)
-    love.graphics.rectangle("fill", -10, -10, 20, 20)
+    theme.lightOrb(0, 0, 10, hue, brightness, t * (1 - burden * 0.6))
     love.graphics.pop()
+
+    -- Shadows: anti-lights that blot out the glow they cling to
+    for i, shadow in ipairs(self.shadows) do
+        local alpha = shadow.opacity
+        local size = shadow.permanent and 15 or 12
+        local wob = t * (shadow.state == "attached" and 0.8 or 1.6) + i
+        -- a faint bruise at the rim so they read against the dark
+        local rim = (shadow.state == "free") and 0.07 or 0.04
+        theme.glow(shadow.x, shadow.y, size * 3.2, 0.45, 0.30, 0.55, rim * alpha)
+        theme.glow(shadow.x, shadow.y, size * 3.4, 0.01, 0.005, 0.02, 0.85 * alpha, "alpha")
+        theme.blob(shadow.x, shadow.y, size, wob, 0.22, 18, 0.015, 0.01, 0.025, 0.95 * alpha)
+        if shadow.permanent then
+            love.graphics.setColor(0.35, 0.22, 0.42, 0.25 * alpha)
+            love.graphics.setLineWidth(1)
+            love.graphics.circle("line", shadow.x, shadow.y, size + 2, 24)
+        end
+    end
 
     -- Draw burst particles
     visual_effects.drawBurstParticles()
 
-    -- Vignette / dimming effect (custom for Weight - follows player)
+    -- Perception narrows around you
     self:drawVignette(burden)
 
     love.graphics.pop()
 
-    -- Draw intrusive message
+    -- Intrusive thoughts surface and sink
     if self.message.text and self.message.alpha > 0 then
-        love.graphics.setFont(self.messageFont)
-        love.graphics.setColor(0.7, 0.5, 0.5, self.message.alpha * 0.8)
-        local msgW = self.messageFont:getWidth(self.message.text)
-        love.graphics.print(self.message.text, (self.screenW - msgW) / 2, self.screenH / 2 - 80)
+        local a = self.message.alpha
+        theme.printCentered(self.message.text, theme.font("poem", 28), self.screenW / 2,
+            self.screenH / 2 - 92 - (1 - a) * 6, 0.86, 0.62, 0.56, a * 0.85)
     end
 
-    -- Draw UI
-    love.graphics.setFont(self.font)
-    love.graphics.setColor(0.6, 0.6, 0.6, 0.7)
-    love.graphics.print("WASD to move. Space at green zones to release burdens.", 20, 20)
-    love.graphics.print("Return to center and rest to end.", 20, 40)
+    -- How to play, fading as the weight arrives
+    local hintA = math.max(0, 1 - math.max(0, self.time - 10) / 4) * 0.55
+    if hintA > 0 then
+        local ink = theme.colors.inkSoft
+        love.graphics.setFont(theme.font("ui", 14))
+        love.graphics.setColor(ink[1], ink[2], ink[3], hintA)
+        love.graphics.print("Move with WASD. In the warm pools, Space sets burdens down.", 20, self.screenH - 52)
+        love.graphics.print("When you are ready, return to the centre and rest.", 20, self.screenH - 32)
+    end
 
     -- Draw end state overlay
     if self.endState.active then
@@ -490,24 +511,10 @@ function Weight:draw()
 end
 
 function Weight:drawVignette(burden)
-    -- Field of view shrink: radius decreases with burden
-    local radius = lerp(400, 150, burden)
-
-    -- Create vignette using stencil
-    love.graphics.stencil(function()
-        love.graphics.circle("fill", self.player.x, self.player.y, radius)
-    end, "replace", 1)
-
-    -- Draw darkness outside the circle
-    love.graphics.setStencilTest("less", 1)
+    -- Field of view shrinks with burden; the edge is soft, like tired eyes
+    local radius = lerp(460, 170, burden)
     local alpha = 0.2 + burden * 0.6
-    love.graphics.setColor(0, 0, 0, alpha)
-    love.graphics.rectangle("fill", 0, 0, self.screenW, self.screenH)
-    love.graphics.setStencilTest()
-
-    -- Soft edge gradient (draw a ring)
-    love.graphics.setColor(0, 0, 0, alpha * 0.5)
-    love.graphics.circle("line", self.player.x, self.player.y, radius)
+    theme.darknessAround(self.player.x, self.player.y, radius, 0.01, 0.008, 0.012, alpha)
 end
 
 return { new = Weight.new }
