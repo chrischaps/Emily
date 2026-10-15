@@ -719,6 +719,11 @@ function FogExit:updateUI(dt)
     end
 end
 
+function FogExit:getEndingText()
+    local texts = endingTexts[self.endState.type] or endingTexts.ambiguous
+    return table.concat(texts, "\n")
+end
+
 function FogExit:updateEndCondition(dt)
     local endState = self.endState
 
@@ -910,20 +915,6 @@ function FogExit:draw()
     if self.endState.fading then
         love.graphics.setColor(0, 0, 0, self.endState.fadeAlpha)
         love.graphics.rectangle("fill", 0, 0, 960, 540)
-
-        if self.endState.fadeAlpha > 0.4 then
-            love.graphics.setFont(self.font)
-            local textAlpha = (self.endState.fadeAlpha - 0.4) / 0.6
-            love.graphics.setColor(0.7, 0.7, 0.75, textAlpha)
-
-            local texts = endingTexts[self.endState.type] or endingTexts.ambiguous
-            local y = 270 - (#texts * 20)
-            for _, line in ipairs(texts) do
-                local w = self.font:getWidth(line)
-                love.graphics.print(line, (960 - w) / 2, y)
-                y = y + 35
-            end
-        end
     end
 end
 

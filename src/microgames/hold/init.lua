@@ -1143,7 +1143,7 @@ function Hold:updateEnding(dt)
     self.endingTimer = self.endingTimer + dt
     self.fadeAlpha = math.min(1, self.endingTimer / 2)
 
-    if self.endingTimer > 5 then
+    if self.endingTimer > 2.4 then
         self.finished = true
         heartbeat_music.reset()
         slide_sfx.reset()
@@ -1431,17 +1431,19 @@ end
 
 function Hold:drawEnding()
     -- Fade overlay
-    love.graphics.setColor(0.05, 0.05, 0.08, self.fadeAlpha * 0.9)
+    love.graphics.setColor(0.05, 0.05, 0.08, self.fadeAlpha)
     love.graphics.rectangle("fill", 0, 0, 960, 540)
+end
 
-    -- Ending text
-    if self.endingText ~= "" and self.endingTimer > 1.5 then
-        local textAlpha = math.min(1, (self.endingTimer - 1.5) / 1.5)
-        love.graphics.setColor(0.8, 0.82, 0.85, textAlpha)
-        local font = love.graphics.getFont()
-        local textWidth = font:getWidth(self.endingText)
-        love.graphics.print(self.endingText, 480 - textWidth / 2, 260)
-    end
+function Hold:cleanup()
+    heartbeat_music.stop()
+    heartbeat_music.reset()
+    slide_sfx.stop()
+    slide_sfx.reset()
+end
+
+function Hold:getEndingText()
+    return self.endingText
 end
 
 function Hold:getDebugInfo()

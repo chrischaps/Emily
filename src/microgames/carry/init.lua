@@ -70,6 +70,14 @@ function Carry.new()
     -- Player wobble phase
     self.playerWobblePhase = 0
 
+    -- The work, and how it ends: either the basin fills (and will empty
+    -- again), or you stop carrying and simply rest.
+    self.delivered = 0
+    self.basinSize = 12
+    self.restTimer = 0
+    self.ending = nil
+    self.endingTimer = 0
+
     return self
 end
 
@@ -107,7 +115,51 @@ local function lerp(a, b, t)
     return a + (b - a) * t
 end
 
+local endingTexts = {
+    full = "The basin is full.\nTomorrow it will be empty again.",
+    rest = "You set the buckets down.\nThe well is still there.",
+}
+
+function Carry:getEndingText()
+    return endingTexts[self.ending]
+end
+
+function Carry:beginEnding(kind)
+    if self.ending then return end
+    self.ending = kind
+    self.endingTimer = 0
+    audio.play("ending", 0.25)
+end
+
+function Carry:updateEnding(dt)
+    self.endingTimer = self.endingTimer + dt
+    if self.endingTimer > 1 then
+        burden_music.stop()
+        water_sfx.stop()
+    end
+    if self.endingTimer > 2.6 then
+        self.finished = true
+    end
+end
+
+function Carry:checkRest(dt, isMoving)
+    -- Resting only means something once some of the work has been done
+    local idle = self.delivered > 0 and self.bucketsCarried == 0 and not isMoving
+        and not self.atWell and not self.atDropoff
+    if idle then
+        self.restTimer = self.restTimer + dt
+        if self.restTimer > 6 then self:beginEnding("rest") end
+    else
+        self.restTimer = 0
+    end
+end
+
 function Carry:update(dt)
+    if self.ending then
+        self.gameTime = self.gameTime + dt
+        self:updateEnding(dt)
+        return
+    end
     self.gameTime = self.gameTime + dt
     self.playerWobblePhase = self.playerWobblePhase + dt * (2 + self.bucketsCarried * 0.3)
 
@@ -197,6 +249,8 @@ function Carry:update(dt)
 
     -- Update well ripples
     self:updateWellRipples(dt)
+
+    self:checkRest(dt, actualSpeed > 1)
 end
 
 function Carry:spawnWellRipple()
@@ -434,6 +488,10 @@ function Carry:updateDropoff(dt, nearDropoff)
         if dep.holdTime >= dep.requiredHoldTime then
             water_sfx.playDropoff(self.bucketsCarried / self.maxBuckets)
             self.bucketsCarried = self.bucketsCarried - 1
+            self.delivered = self.delivered + 1
+            if self.delivered >= self.basinSize then
+                self:beginEnding("full")
+            end
             visual_effects.spawnBurst(self.dropoff.x, self.dropoff.y, 8, {0.4, 0.8, 0.4})
 
             -- Small screen shake for feedback
@@ -620,6 +678,12 @@ function Carry:draw()
 
     -- UI (not affected by shake)
     self:drawUI()
+
+    if self.ending then
+        local fade = math.min(1, self.endingTimer / 2)
+        love.graphics.setColor(0.03, 0.025, 0.02, fade)
+        love.graphics.rectangle("fill", 0, 0, 960, 540)
+    end
 end
 
 function Carry:drawDustParticles()

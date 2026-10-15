@@ -10,6 +10,8 @@
 -- at     seconds after start to capture (comma list for several frames;
 --        "out" then gets _1, _2... suffixes)
 -- out    absolute PNG path
+-- ending seconds after start to force the shared ending card
+-- endtext text to show on it (use / for a line break)
 
 local devshot = {}
 
@@ -38,6 +40,12 @@ function devshot.init()
     local env = os.getenv("EMILY_SHOT")
     if not env or env == "" then return end
     spec = parse(env)
+
+    -- Unattended runs should report errors and exit, not wait on the error screen
+    love.errorhandler = function(msg)
+        print("[devshot] error: " .. tostring(msg) .. "\n" .. debug.traceback())
+        return nil
+    end
 
     for item in (spec.keys or ""):gmatch("[^,]+") do
         local key, at = item:match("^(.-)@([%d%.]+)$")
@@ -79,6 +87,18 @@ end
 function devshot.update(dt)
     if not spec then return end
     clock = clock + dt
+
+    if spec.ending and not spec.ended and clock >= tonumber(spec.ending) then
+        spec.ended = true
+        local scene = require("src.core.scene_manager").current
+        if scene and scene.beginEnding then
+            local text = (spec.endtext or ""):gsub("/", "\n")
+            if text ~= "" then
+                scene.microgame.getEndingText = function() return text end
+            end
+            scene:beginEnding()
+        end
+    end
 
     for i = #pending, 1, -1 do
         local p = pending[i]

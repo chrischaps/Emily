@@ -2,6 +2,7 @@ local scene_manager = require("src.core.scene_manager")
 local settings = require("src.core.settings")
 local input = require("src.core.input")
 local audio = require("src.core.audio")
+local theme = require("src.core.theme")
 
 local settings_scene = {}
 settings_scene.__index = settings_scene
@@ -36,13 +37,20 @@ function settings_scene.new(returnScene)
 end
 
 function settings_scene:load()
-    self.font = love.graphics.newFont(18)
-    self.titleFont = love.graphics.newFont(28)
+    self.time = 0
+    self.shown = {}  -- eased slider values, so changes glide
+    for _, item in ipairs(settingsItems) do
+        self.shown[item.key] = settings.get(item.key)
+    end
     settings.load()  -- Load saved settings
     audio.init()
 end
 
 function settings_scene:update(dt)
+    self.time = (self.time or 0) + dt
+    for _, item in ipairs(settingsItems) do
+        self.shown[item.key] = theme.approach(self.shown[item.key], settings.get(item.key), 14, dt)
+    end
     if not input.hasGamepad() then return end
 
     local moveX, moveY, isAnalog = input.getMovement()
@@ -136,7 +144,7 @@ function settings_scene:keypressed(key)
         audio.play("ui_back")
         settings.save()
         self:applySettings()
-        scene_manager.setScene(self.returnScene)
+        scene_manager.switchTo(self.returnScene, { out = 0.3, inn = 0.45 })
     elseif key == "down" or key == "s" then
         self:navigate(1)
     elseif key == "up" or key == "w" then
@@ -155,7 +163,7 @@ function settings_scene:gamepadpressed(joystick, button)
         audio.play("ui_back")
         settings.save()
         self:applySettings()
-        scene_manager.setScene(self.returnScene)
+        scene_manager.switchTo(self.returnScene, { out = 0.3, inn = 0.45 })
     elseif button == "dpup" then
         self:navigate(-1)
     elseif button == "dpdown" then
@@ -170,65 +178,74 @@ function settings_scene:gamepadpressed(joystick, button)
 end
 
 function settings_scene:draw()
-    local scaling = require("src.core.scaling")
-    local vw, vh = scaling.getVirtualSize()
+    local a = theme.colors.abyss
+    love.graphics.clear(a[1], a[2], a[3])
+    local hue = theme.hues.shell
+    local ink, soft, faint = theme.colors.ink, theme.colors.inkSoft, theme.colors.inkFaint
+    local t = self.time or 0
 
-    love.graphics.clear(0.08, 0.08, 0.1)
+    theme.glowEllipse(480, 300, 560, 330, 0, hue.light[1], hue.light[2], hue.light[3], 0.06)
 
     -- Title
-    love.graphics.setColor(1, 1, 1)
-    love.graphics.setFont(self.titleFont)
-    love.graphics.print("Settings", 40, 40)
+    love.graphics.setFont(theme.font("display", 40))
+    love.graphics.setColor(ink[1], ink[2], ink[3], 0.95)
+    love.graphics.print("Settings", 56, 40)
+    love.graphics.setFont(theme.font("poem", 19))
+    love.graphics.setColor(soft[1], soft[2], soft[3], 0.75)
+    love.graphics.print("how loud the world should be", 58, 88)
 
-    -- Settings items
-    love.graphics.setFont(self.font)
-    local y = 120
-    local sliderWidth = 200
-    local sliderHeight = 12
-    local labelX = 60
-    local sliderX = 260
-
+    -- Sliders: a thread of light, filled as far as the level reaches
+    local labelX, sliderX, sliderW = 120, 400, 340
+    local y = 190
     for i, item in ipairs(settingsItems) do
         local isSelected = (i == self.selectedIndex)
-        local value = settings.get(item.key)
+        local value = self.shown[item.key] or settings.get(item.key)
+        local frac = (value - item.min) / (item.max - item.min)
+        local cy = y + 12
 
-        -- Label
+        local font = theme.font("ui", 18)
+        love.graphics.setFont(font)
         if isSelected then
-            love.graphics.setColor(1, 1, 1)
+            theme.glow(labelX - 22, cy, 12, hue.light[1], hue.light[2], hue.light[3], 0.9)
+            love.graphics.setColor(ink[1], ink[2], ink[3], 1)
         else
-            love.graphics.setColor(0.7, 0.7, 0.7)
+            love.graphics.setColor(soft[1], soft[2], soft[3], 0.65)
         end
-        local prefix = isSelected and "> " or "  "
-        love.graphics.print(prefix .. item.label, labelX, y)
+        love.graphics.print(item.label, labelX, y)
 
-        -- Slider background
-        love.graphics.setColor(0.3, 0.3, 0.35)
-        love.graphics.rectangle("fill", sliderX, y + 4, sliderWidth, sliderHeight, 4, 4)
+        -- Track
+        love.graphics.setLineWidth(2)
+        love.graphics.setColor(faint[1], faint[2], faint[3], 0.35)
+        love.graphics.line(sliderX, cy, sliderX + sliderW, cy)
 
-        -- Slider fill
-        local fillWidth = (value - item.min) / (item.max - item.min) * sliderWidth
-        if isSelected then
-            love.graphics.setColor(0.4, 0.7, 1)
-        else
-            love.graphics.setColor(0.5, 0.5, 0.6)
-        end
-        love.graphics.rectangle("fill", sliderX, y + 4, fillWidth, sliderHeight, 4, 4)
+        -- Fill
+        local fx = sliderX + sliderW * frac
+        local strength = isSelected and 1 or 0.45
+        love.graphics.setLineWidth(isSelected and 3 or 2)
+        love.graphics.setColor(hue.light[1], hue.light[2], hue.light[3], 0.85 * strength)
+        love.graphics.line(sliderX, cy, fx, cy)
+        love.graphics.setLineWidth(1)
 
-        -- Value text
-        love.graphics.setColor(0.9, 0.9, 0.9)
-        local percent = math.floor(value * 100)
-        love.graphics.print(percent .. "%", sliderX + sliderWidth + 15, y)
+        -- The level itself, a small living light
+        local pulse = isSelected and (0.9 + 0.1 * math.sin(t * 3)) or 0.55
+        theme.lightOrb(fx, cy, isSelected and 5 or 3.5, hue, pulse, t + i)
 
-        y = y + 40
+        -- Value
+        love.graphics.setFont(theme.font("ui", 15))
+        love.graphics.setColor(soft[1], soft[2], soft[3], isSelected and 0.95 or 0.5)
+        love.graphics.print(math.floor(settings.get(item.key) * 100 + 0.5) .. "%", sliderX + sliderW + 26, y + 2)
+
+        y = y + 58
     end
 
     -- Controls hint
-    love.graphics.setColor(0.5, 0.5, 0.55)
+    love.graphics.setFont(theme.font("ui", 13))
+    love.graphics.setColor(faint[1], faint[2], faint[3], 0.6)
     local hasGamepad = input.hasGamepad()
     if hasGamepad then
-        love.graphics.print("Stick/D-pad: navigate | Left/Right: adjust | B: back", 60, y + 30)
+        love.graphics.print("Stick  choose      Left/Right  adjust      B  back", 56, theme.H - 34)
     else
-        love.graphics.print("Up/Down: navigate | Left/Right: adjust | Esc: back", 60, y + 30)
+        love.graphics.print("Up/Down  choose      Left/Right  adjust      Esc  back", 56, theme.H - 34)
     end
 end
 

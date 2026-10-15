@@ -533,6 +533,10 @@ function FogAnchors:activateAnchor(anchor)
     end
 end
 
+function FogAnchors:getEndingText()
+    return "You stop looking for something to confirm where you are.\nNothing resolves.\nBut nothing collapses."
+end
+
 function FogAnchors:updateEndCondition(dt, isMoving)
     local endState = self.endState
     local dis = self.disorientation.value
@@ -706,24 +710,6 @@ function FogAnchors:draw()
     if self.endState.fading then
         love.graphics.setColor(0, 0, 0, self.endState.fadeAlpha)
         love.graphics.rectangle("fill", 0, 0, 960, 540)
-
-        if self.endState.fadeAlpha > 0.3 then
-            love.graphics.setFont(self.font)
-            love.graphics.setColor(0.7, 0.7, 0.75, (self.endState.fadeAlpha - 0.3) / 0.7)
-
-            local lines = {
-                "You stop looking for something to confirm where you are.",
-                "Nothing resolves.",
-                "But nothing collapses."
-            }
-
-            local y = 220
-            for _, line in ipairs(lines) do
-                local w = self.font:getWidth(line)
-                love.graphics.print(line, (960 - w) / 2, y)
-                y = y + 35
-            end
-        end
     end
 
     -- Minimal UI

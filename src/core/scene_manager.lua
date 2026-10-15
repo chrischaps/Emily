@@ -16,6 +16,9 @@ end
 
 --- Swap scenes immediately
 function scene_manager.setScene(scene_module, ...)
+    if scene_manager.current and scene_manager.current ~= scene_module then
+        safe_call(scene_manager.current, "unload")
+    end
     scene_manager.current = scene_module
     safe_call(scene_manager.current, "load", ...)
 end

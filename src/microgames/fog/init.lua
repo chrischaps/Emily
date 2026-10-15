@@ -405,6 +405,10 @@ function Fog:checkCollision(newX, newY)
     return newX, newY, collided
 end
 
+function Fog:getEndingText()
+    return "You stop trying to orient yourself.\nThe world does not resolve."
+end
+
 function Fog:updateEndCondition(dt, isMoving)
     local endState = self.endState
     local dis = self.disorientation.value
@@ -559,17 +563,6 @@ function Fog:draw()
     if self.endState.fading then
         love.graphics.setColor(0, 0, 0, self.endState.fadeAlpha)
         love.graphics.rectangle("fill", 0, 0, 960, 540)
-
-        if self.endState.fadeAlpha > 0.3 then
-            love.graphics.setFont(self.font)
-            love.graphics.setColor(0.7, 0.7, 0.75, self.endState.fadeAlpha)
-            local text1 = "You stop trying to orient yourself."
-            local text2 = "The world does not resolve."
-            local w1 = self.font:getWidth(text1)
-            local w2 = self.font:getWidth(text2)
-            love.graphics.print(text1, (960 - w1) / 2, 240)
-            love.graphics.print(text2, (960 - w2) / 2, 280)
-        end
     end
 
     -- Minimal UI (no disorientation indicator shown to player)

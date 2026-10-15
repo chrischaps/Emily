@@ -151,6 +151,29 @@ function theme.printCentered(text, font, cx, y, r, g, b, a)
     love.graphics.print(text, math.floor(cx - w / 2 + 0.5), math.floor(y + 0.5))
 end
 
+--- Print words joined by soft separators, wrapping without leaving a
+--- separator dangling at a line end. Uses the current colour. Returns lines.
+function theme.printWordList(words, font, x, y, width, lineHeight, sep)
+    sep = sep or "  ·  "
+    love.graphics.setFont(font)
+    local sepW = font:getWidth(sep)
+    local cx, lines = 0, 1
+    for i, word in ipairs(words) do
+        local ww = font:getWidth(word)
+        if i > 1 then
+            if cx + sepW + ww > width then
+                cx, lines = 0, lines + 1
+            else
+                love.graphics.print(sep, x + cx, y + (lines - 1) * lineHeight)
+                cx = cx + sepW
+            end
+        end
+        love.graphics.print(word, x + cx, y + (lines - 1) * lineHeight)
+        cx = cx + ww
+    end
+    return lines
+end
+
 --============================================================================
 -- LIGHT
 --============================================================================

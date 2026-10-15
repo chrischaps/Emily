@@ -1435,7 +1435,7 @@ function Ledger:updateEnding(dt)
         music.stop()
     end
 
-    if self.endingTimer > 5 then
+    if self.endingTimer > 2.4 then
         self.finished = true
     end
 end
@@ -2440,17 +2440,16 @@ end
 
 function Ledger:drawEnding()
     -- Fade overlay
-    love.graphics.setColor(0.04, 0.045, 0.05, self.fadeAlpha * 0.95)
+    love.graphics.setColor(0.04, 0.045, 0.05, self.fadeAlpha)
     love.graphics.rectangle("fill", 0, 0, self.screenW, self.screenH)
+end
 
-    -- Ending text
-    if self.endingText ~= "" and self.endingTimer > 1.5 then
-        local textAlpha = math.min(1, (self.endingTimer - 1.5) / 1.5)
-        love.graphics.setColor(0.7, 0.72, 0.75, textAlpha)
-        local font = love.graphics.getFont()
-        local textWidth = font:getWidth(self.endingText)
-        love.graphics.print(self.endingText, (self.screenW - textWidth) / 2, self.screenH / 2 - 10)
-    end
+function Ledger:cleanup()
+    music.stop()
+end
+
+function Ledger:getEndingText()
+    return self.endingText
 end
 
 function Ledger:getDebugInfo()

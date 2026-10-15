@@ -331,12 +331,21 @@ function Weight:updateMessages(dt)
     end
 end
 
+function Weight:getEndingText()
+    return endMessage
+end
+
 function Weight:checkEndCondition(dt)
     local centerX, centerY = self.screenW / 2, self.screenH / 2
     local distToCenter = dist(self.player.x, self.player.y, centerX, centerY)
 
+    -- You begin at the centre; resting there only counts once you have left it
+    if distToCenter > 120 then
+        self.endState.hasLeftCenter = true
+    end
+
     -- Must be near center and not moving
-    if distToCenter < 40 and not self.player.isMoving then
+    if self.endState.hasLeftCenter and distToCenter < 40 and not self.player.isMoving then
         self.endState.timer = self.endState.timer + dt
         if self.endState.timer >= 3 then
             self.endState.active = true
@@ -349,10 +358,10 @@ end
 function Weight:updateEndState(dt)
     self.endState.fadeAlpha = math.min(1, self.endState.fadeAlpha + dt * 0.5)
 
-    -- After full fade, wait a bit then finish
+    -- After full fade, a breath, then finish (the ending card says the words)
     if self.endState.fadeAlpha >= 1 then
         self.endState.timer = self.endState.timer + dt
-        if self.endState.timer >= 6 then  -- 3 sec to trigger + 3 sec showing message
+        if self.endState.timer >= 3.4 then  -- 3 sec to trigger + a short breath
             self:finish()
         end
     end
@@ -475,23 +484,8 @@ function Weight:draw()
 
     -- Draw end state overlay
     if self.endState.active then
-        love.graphics.setColor(0, 0, 0, self.endState.fadeAlpha * 0.8)
+        love.graphics.setColor(0, 0, 0, self.endState.fadeAlpha)
         love.graphics.rectangle("fill", 0, 0, self.screenW, self.screenH)
-
-        if self.endState.fadeAlpha > 0.5 then
-            love.graphics.setFont(self.endFont)
-            love.graphics.setColor(0.8, 0.8, 0.8, (self.endState.fadeAlpha - 0.5) * 2)
-            local lines = {}
-            for line in endMessage:gmatch("[^\n]+") do
-                table.insert(lines, line)
-            end
-            local y = self.screenH / 2 - (#lines * 25) / 2
-            for _, line in ipairs(lines) do
-                local w = self.endFont:getWidth(line)
-                love.graphics.print(line, (self.screenW - w) / 2, y)
-                y = y + 30
-            end
-        end
     end
 end
 
