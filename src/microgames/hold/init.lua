@@ -4,6 +4,7 @@ local input = require("src.core.input")
 local heartbeat_music = require("src.microgames.hold.heartbeat_music")
 local visual_effects = require("src.core.visual_effects")
 local slide_sfx = require("src.core.slide_sfx")
+local theme = require("src.core.theme")
 
 local Hold = setmetatable({}, { __index = MicroGameBase })
 Hold.__index = Hold
@@ -129,44 +130,14 @@ local function lerp(a, b, t)
     return a + (b - a) * t
 end
 
--- Draw an organic blob shape with wobbling edges
-local function drawBlob(x, y, baseRadius, time, wobbleAmount, segments, r, g, b, a)
-    segments = segments or 24
-    wobbleAmount = wobbleAmount or 0.15
+-- Organic blob with wobbling edges (shared with every living thing)
+local drawBlob = theme.blob
 
-    local vertices = {}
-    for i = 0, segments - 1 do
-        local angle = (i / segments) * math.pi * 2
-
-        -- Multiple sine waves for organic wobble
-        local wobble1 = math.sin(angle * 3 + time * 2) * wobbleAmount
-        local wobble2 = math.sin(angle * 5 - time * 1.5) * wobbleAmount * 0.5
-        local wobble3 = math.sin(angle * 2 + time * 0.8) * wobbleAmount * 0.3
-
-        local radius = baseRadius * (1 + wobble1 + wobble2 + wobble3)
-
-        local vx = x + math.cos(angle) * radius
-        local vy = y + math.sin(angle) * radius
-        table.insert(vertices, vx)
-        table.insert(vertices, vy)
-    end
-
-    love.graphics.setColor(r, g, b, a)
-    if #vertices >= 6 then
-        love.graphics.polygon("fill", vertices)
-    end
-end
-
--- Draw a soft, organic glow around a point
+-- A soft, organic glow: one smooth halo of light, with a faint wobbling
+-- body so the edge still feels alive
 local function drawOrganicGlow(x, y, baseRadius, time, layers, r, g, b, baseAlpha)
-    layers = layers or 5
-    for i = layers, 1, -1 do
-        local layerRatio = i / layers
-        local radius = baseRadius * (0.5 + layerRatio * 0.8)
-        local alpha = baseAlpha * (1 - layerRatio) * 0.5
-        local wobble = 0.1 + layerRatio * 0.1
-        drawBlob(x, y, radius, time + i * 0.3, wobble, 20, r, g, b, alpha)
-    end
+    theme.glow(x, y, baseRadius * 1.6, r, g, b, baseAlpha * 0.55)
+    drawBlob(x, y, baseRadius * 0.95, time, 0.15, 20, r, g, b, baseAlpha * 0.12)
 end
 
 -- Draw flowing tendrils extending from a point
@@ -295,13 +266,8 @@ local function drawAmbientBackground(time, warmth, intimacy)
         local y = (light.y + light.drift.y * time * 50) % 540
         local size = light.size * (0.8 + pulse * 0.4)
 
-        -- Soft radial gradient
-        for layer = 5, 1, -1 do
-            local layerSize = size * (layer / 5)
-            local layerAlpha = baseAlpha * 0.4 * (1 - layer / 6) * pulse
-            love.graphics.setColor(r + 0.1, g + 0.1, b + 0.05, layerAlpha)
-            love.graphics.circle("fill", x, y, layerSize)
-        end
+        -- Soft radial light
+        theme.glow(x, y, size, r + 0.1, g + 0.1, b + 0.05, baseAlpha * 0.9 * pulse)
     end
 
     -- Draw flowing currents
@@ -449,6 +415,13 @@ function Hold:update(dt)
     end
 
     -- Update visual effects
+    theme.setModifiers({
+        bloom_intensity = self.warmth * 0.35,
+        bloom_threshold = -self.warmth * 0.06,
+        saturation = self.intimacy.value * 0.10,
+        warmth = self.warmth * 0.025,
+    })
+
     visual_effects.update(dt, {
         intensity = self.intimacy.value,
         warmth = self.warmth,
@@ -1208,7 +1181,8 @@ function Hold:draw()
     -- Minimal instructions (fade out after a few seconds)
     if self.gameTime < 8 then
         local alpha = self.gameTime < 5 and 0.5 or 0.5 * (1 - (self.gameTime - 5) / 3)
-        love.graphics.setColor(1, 1, 1, alpha)
+        love.graphics.setFont(theme.font("poem", 20))
+        love.graphics.setColor(1, 0.94, 0.92, alpha)
         if self.gameTime < 4 then
             love.graphics.print("Approach gently.", 20, 510)
         else

@@ -4,6 +4,7 @@ local audio = require("src.core.audio")
 local visual_effects = require("src.core.visual_effects")
 local burden_music = require("src.microgames.carry.burden_music")
 local water_sfx = require("src.microgames.carry.water_sfx")
+local theme = require("src.core.theme")
 
 local Carry = setmetatable({}, { __index = MicroGameBase })
 Carry.__index = Carry
@@ -24,7 +25,7 @@ function Carry.new()
     self.maxBuckets = 5
     self.well = { x = 200, y = 270, r = 24, pulsePhase = 0 }
     self.dropoff = { x = 760, y = 270, r = 28, pulsePhase = math.pi }
-    self.font = love.graphics.newFont(16)
+    self.font = theme.font("ui", 15)
 
     -- Track zone presence to only pickup/dropoff once per visit
     self.atWell = false
@@ -231,7 +232,7 @@ function Carry:update(dt)
         intensity = burdenIntensity,
         warmth = 0,
         entities = {
-            player = { x = self.player.x, y = self.player.y, color = {0.7, 0.75, 0.9} },
+            player = { x = self.player.x, y = self.player.y, color = theme.hues.burden.light },
         },
     })
 
@@ -492,7 +493,7 @@ function Carry:updateDropoff(dt, nearDropoff)
             if self.delivered >= self.basinSize then
                 self:beginEnding("full")
             end
-            visual_effects.spawnBurst(self.dropoff.x, self.dropoff.y, 8, {0.4, 0.8, 0.4})
+            visual_effects.spawnBurst(self.dropoff.x, self.dropoff.y, 8, theme.hues.burden.core)
 
             -- Small screen shake for feedback
             visual_effects.shake(0.1, 4)
@@ -584,32 +585,8 @@ function Carry:updateDustParticles(dt)
     end
 end
 
--- Draw an organic blob shape with wobbling edges
-local function drawBlob(x, y, baseRadius, time, wobbleAmount, segments, r, g, b, a)
-    segments = segments or 20
-    wobbleAmount = wobbleAmount or 0.1
-
-    local vertices = {}
-    for i = 0, segments - 1 do
-        local angle = (i / segments) * math.pi * 2
-
-        -- Multiple sine waves for organic wobble
-        local wobble1 = math.sin(angle * 3 + time * 2) * wobbleAmount
-        local wobble2 = math.sin(angle * 5 - time * 1.5) * wobbleAmount * 0.5
-
-        local radius = baseRadius * (1 + wobble1 + wobble2)
-
-        local vx = x + math.cos(angle) * radius
-        local vy = y + math.sin(angle) * radius
-        table.insert(vertices, vx)
-        table.insert(vertices, vy)
-    end
-
-    love.graphics.setColor(r, g, b, a)
-    if #vertices >= 6 then
-        love.graphics.polygon("fill", vertices)
-    end
-end
+-- Organic blob with wobbling edges (shared with every living thing)
+local drawBlob = theme.blob
 
 -- Draw water buckets attached to player
 function Carry:drawWaterBuckets(x, y, time)
@@ -723,13 +700,8 @@ function Carry:drawWell()
     local time = self.gameTime
     local pulse = 0.95 + 0.05 * math.sin(w.pulsePhase)
 
-    -- Outer glow
-    for i = 5, 1, -1 do
-        local glowR = (w.r + 15) * (1 + i * 0.15) * pulse
-        local alpha = 0.08 * (1 - i / 6)
-        love.graphics.setColor(0.2, 0.4, 0.9, alpha)
-        love.graphics.circle("fill", w.x, w.y, glowR)
-    end
+    -- Outer glow: cool water in a warm, tired world
+    theme.glow(w.x, w.y, (w.r + 15) * 2.8 * pulse, 0.25, 0.5, 1.0, 0.32)
 
     -- Main well body with organic shape
     drawBlob(w.x, w.y, (w.r + 10) * pulse, time, 0.08, 24, 0.15, 0.3, 0.7, 0.4)
@@ -845,25 +817,29 @@ function Carry:drawDropoff()
     local d = self.dropoff
     local time = self.gameTime
     local pulse = 0.95 + 0.05 * math.sin(d.pulsePhase)
+    local hue = theme.hues.burden
+    local fill = math.min(1, self.delivered / self.basinSize)
 
-    -- Outer glow
-    for i = 5, 1, -1 do
-        local glowR = (d.r + 15) * (1 + i * 0.12) * pulse
-        local alpha = 0.06 * (1 - i / 6)
-        love.graphics.setColor(0.3, 0.8, 0.3, alpha)
-        love.graphics.circle("fill", d.x, d.y, glowR)
+    -- Warm halo
+    theme.glow(d.x, d.y, (d.r + 15) * 2.6 * pulse, hue.core[1], hue.core[2], hue.core[3], 0.22)
+
+    -- The basin's rim
+    drawBlob(d.x, d.y, (d.r + 8) * pulse, time * 0.8, 0.05, 28, hue.light[1] * 0.45, hue.light[2] * 0.35, hue.light[3] * 0.25, 0.55)
+    love.graphics.setLineWidth(2)
+    love.graphics.setColor(hue.core[1], hue.core[2], hue.core[3], 0.55)
+    love.graphics.circle("line", d.x, d.y, (d.r + 8) * pulse, 48)
+    love.graphics.setLineWidth(1)
+
+    -- The water you have brought, rising toward full
+    if fill > 0 then
+        local wr = (d.r + 4) * (0.25 + 0.75 * math.sqrt(fill)) * pulse
+        theme.glow(d.x, d.y, wr * 1.8, 0.3, 0.55, 1.0, 0.25 + 0.2 * fill)
+        drawBlob(d.x, d.y, wr, time * 1.3, 0.1, 20, 0.22, 0.45, 0.95, 0.8)
+        drawBlob(d.x + math.sin(time * 2) * 1.5, d.y, wr * 0.6, time * 1.7, 0.15, 16, 0.4, 0.62, 1, 0.45)
     end
 
-    -- Main dropoff body with organic shape
-    drawBlob(d.x, d.y, (d.r + 8) * pulse, time * 0.8, 0.06, 24, 0.25, 0.6, 0.25, 0.35)
-    drawBlob(d.x, d.y, d.r * pulse, time, 0.08, 20, 0.4, 0.85, 0.4, 0.85)
-
-    -- Inner detail
-    drawBlob(d.x, d.y, d.r * 0.6 * pulse, time * 1.3, 0.12, 16, 0.5, 0.9, 0.5, 0.5)
-
-    -- Bright center
-    love.graphics.setColor(0.6, 1, 0.6, 0.35)
-    love.graphics.circle("fill", d.x, d.y, d.r * 0.25 * pulse)
+    -- Bright centre
+    theme.glow(d.x, d.y, d.r * 0.7 * pulse, hue.core[1], hue.core[2], hue.core[3], 0.4)
 
     -- Draw deposit progress indicator
     self:drawDepositProgress()
@@ -922,6 +898,7 @@ function Carry:drawPlayer()
     local p = self.player
     local time = self.playerWobblePhase
     local burdenIntensity = self.bucketsCarried / self.maxBuckets
+    local hue = theme.hues.burden
 
     -- Pulse slows and becomes heavier with burden
     local pulseSpeed = 2 - burdenIntensity * 0.8
@@ -933,20 +910,15 @@ function Carry:drawPlayer()
     -- Wobble becomes more pronounced with burden
     local wobbleAmount = 0.08 + burdenIntensity * 0.08
 
-    -- Color shifts slightly with burden (more strained)
-    local r = 0.75 - burdenIntensity * 0.1
-    local g = 0.78 - burdenIntensity * 0.15
-    local b = 0.92 - burdenIntensity * 0.1
+    -- The ember dims and reddens as it strains
+    local strain = burdenIntensity * 0.35
+    local r = hue.light[1]
+    local g = hue.light[2] * (1 - strain)
+    local b = hue.light[3] * (1 - strain)
+    local brightness = 1 - burdenIntensity * 0.35
 
-    -- Draw burden glow (more intense with more weight)
-    if burdenIntensity > 0 then
-        for i = 4, 1, -1 do
-            local glowR = (baseSize + 10) * (1 + i * 0.2) * pulse
-            local alpha = 0.04 * burdenIntensity * (1 - i / 5)
-            love.graphics.setColor(0.4, 0.35, 0.5, alpha)
-            love.graphics.circle("fill", p.x, p.y, glowR)
-        end
-    end
+    -- Halo (smaller, duller with weight)
+    theme.glow(p.x, p.y, (baseSize + 10) * 2.6 * pulse, r, g, b, 0.3 * brightness)
 
     -- Draw water buckets first (behind player body)
     self:drawWaterBuckets(p.x, p.y, time)
@@ -955,19 +927,19 @@ function Carry:drawPlayer()
     drawBlob(p.x, p.y, (baseSize + 6) * pulse, time * 0.7, wobbleAmount * 0.6, 18, r * 0.9, g * 0.9, b, 0.2)
 
     -- Main body
-    drawBlob(p.x, p.y, baseSize * pulse, time, wobbleAmount, 20, r, g, b, 0.9)
+    drawBlob(p.x, p.y, baseSize * pulse, time, wobbleAmount, 20, r * 0.8, g * 0.8, b * 0.8, 0.9)
 
     -- Inner layer
-    drawBlob(p.x, p.y, baseSize * 0.65 * pulse, time * 1.3, wobbleAmount * 0.7, 16, r + 0.1, g + 0.1, b + 0.05, 0.5)
+    drawBlob(p.x, p.y, baseSize * 0.65 * pulse, time * 1.3, wobbleAmount * 0.7, 16, r, g + 0.1, b + 0.1, 0.5 * brightness)
 
     -- Core (gets dimmer with burden)
-    local coreAlpha = 0.6 - burdenIntensity * 0.2
-    drawBlob(p.x, p.y, baseSize * 0.35 * pulse, time * 1.6, wobbleAmount * 0.4, 12, 1, 1, 1, coreAlpha)
+    local c = hue.core
+    theme.glow(p.x, p.y, baseSize * 0.9 * pulse, c[1], c[2], c[3], (0.85 - burdenIntensity * 0.4))
 
     -- Sparkle (diminishes with burden)
     local sparkle = 0.5 + 0.5 * math.sin(time * 4)
-    local sparkleAlpha = 0.3 * sparkle * (1 - burdenIntensity * 0.6)
-    love.graphics.setColor(1, 1, 1, sparkleAlpha)
+    local sparkleAlpha = 0.5 * sparkle * (1 - burdenIntensity * 0.6)
+    love.graphics.setColor(1, 0.95, 0.85, sparkleAlpha)
     love.graphics.circle("fill", p.x, p.y, baseSize * 0.15 * pulse)
 end
 
@@ -982,7 +954,8 @@ function Carry:drawUI()
         local fadeIn = math.min(1, self.gameTime / 1)
         local fadeOut = self.gameTime > 4 and (1 - (self.gameTime - 4) / 2) or 1
         love.graphics.setColor(1, 1, 1, instructionAlpha * fadeIn * fadeOut)
-        love.graphics.print("Carry water from the well to the dropoff.", 20, 20)
+        love.graphics.setFont(self.font)
+        love.graphics.print("Carry water from the well to the basin.", 20, 20)
     end
 
     -- Water indicator (visual bar)
@@ -1007,8 +980,9 @@ function Carry:drawUI()
     end
 
     -- Label
+    love.graphics.setFont(theme.font("ui", 14))
     love.graphics.setColor(0.8, 0.85, 0.95, 0.8)
-    love.graphics.print("Water: " .. self.bucketsCarried .. "/" .. self.maxBuckets, barX + barWidth + 10, barY - 2)
+    love.graphics.print("Water  " .. self.bucketsCarried .. " / " .. self.maxBuckets, barX + barWidth + 10, barY - 3)
 end
 
 function Carry:cleanup()

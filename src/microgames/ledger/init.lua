@@ -2,6 +2,7 @@ local MicroGameBase = require("src.core.microgame_base")
 local audio = require("src.core.audio")
 local input = require("src.core.input")
 local music = require("src.microgames.ledger.music")
+local theme = require("src.core.theme")
 
 local Ledger = setmetatable({}, { __index = MicroGameBase })
 Ledger.__index = Ledger
@@ -473,6 +474,13 @@ function Ledger:showSystemMessage(msg)
 end
 
 function Ledger:update(dt)
+    local vitality = self.vitality or 1
+    theme.setModifiers({
+        saturation = -(1 - vitality) * 0.5,
+        contrast = self.complicity.value * 0.10,
+        warmth = -self.complicity.value * 0.02,
+        bloom_intensity = -self.complicity.value * 0.2,
+    })
     if self.ending then
         self:updateEnding(dt)
         return
@@ -1534,6 +1542,7 @@ function Ledger:drawPeripheralGlow()
     -- Also factor in how many are alive vs max
     local lifeDensity = (totalCount / (self.maxFlowers + self.maxCreatures))
     local overallVitality = avgHealth * 0.7 + lifeDensity * 0.3
+    self.vitality = overallVitality
 
     -- Natural colors that blend based on vitality
     -- High health: vibrant greens, warm yellows
@@ -1576,47 +1585,16 @@ function Ledger:drawPeripheralGlow()
         },
     }
 
-    local layers = 12  -- Number of gradient layers
-
-    -- Top edge glow
-    for i = 1, layers do
-        local t = i / layers
-        local y = t * edgeDepth
-        local alpha = baseAlpha * (1 - t) * (1 + 0.2 * math.sin(time + t * 3))
-        local c = colors.top
-        love.graphics.setColor(c.r, c.g, c.b, alpha)
-        love.graphics.rectangle("fill", 0, y - edgeDepth / layers, self.screenW, edgeDepth / layers)
+    -- One soft band of light along each edge, where life still clings
+    local W, H = self.screenW, self.screenH
+    local function edge(c, x, y, rx, ry, phase)
+        local a = baseAlpha * 2.2 * (1 + 0.2 * math.sin(time * phase))
+        theme.glowEllipse(x, y, rx, ry, 0, c.r, c.g, c.b, a)
     end
-
-    -- Bottom edge glow
-    for i = 1, layers do
-        local t = i / layers
-        local y = self.screenH - t * edgeDepth
-        local alpha = baseAlpha * (1 - t) * (1 + 0.2 * math.sin(time * 1.1 + t * 3))
-        local c = colors.bottom
-        love.graphics.setColor(c.r, c.g, c.b, alpha)
-        love.graphics.rectangle("fill", 0, y, self.screenW, edgeDepth / layers)
-    end
-
-    -- Left edge glow
-    for i = 1, layers do
-        local t = i / layers
-        local x = t * edgeDepth
-        local alpha = baseAlpha * (1 - t) * (1 + 0.2 * math.sin(time * 0.9 + t * 3))
-        local c = colors.left
-        love.graphics.setColor(c.r, c.g, c.b, alpha)
-        love.graphics.rectangle("fill", x - edgeDepth / layers, 0, edgeDepth / layers, self.screenH)
-    end
-
-    -- Right edge glow
-    for i = 1, layers do
-        local t = i / layers
-        local x = self.screenW - t * edgeDepth
-        local alpha = baseAlpha * (1 - t) * (1 + 0.2 * math.sin(time * 1.2 + t * 3))
-        local c = colors.right
-        love.graphics.setColor(c.r, c.g, c.b, alpha)
-        love.graphics.rectangle("fill", x, 0, edgeDepth / layers, self.screenH)
-    end
+    edge(colors.top, W / 2, -edgeDepth * 0.15, W * 0.8, edgeDepth * 1.3, 1.0)
+    edge(colors.bottom, W / 2, H + edgeDepth * 0.15, W * 0.8, edgeDepth * 1.3, 1.1)
+    edge(colors.left, -edgeDepth * 0.15, H / 2, edgeDepth * 1.3, H * 0.8, 0.9)
+    edge(colors.right, W + edgeDepth * 0.15, H / 2, edgeDepth * 1.3, H * 0.8, 1.2)
 end
 
 function Ledger:drawAmbient()
@@ -2015,7 +1993,8 @@ function Ledger:drawQueueArea()
     love.graphics.rectangle("fill", queueLeft, queueTop, queueWidth, queueHeight, 8, 8)
 
     -- Queue label
-    love.graphics.setColor(0.4, 0.42, 0.45, 0.5)
+    love.graphics.setFont(theme.font("uiBold", 11))
+    love.graphics.setColor(0.4, 0.42, 0.45, 0.6)
     love.graphics.print("QUEUE", queueLeft + 25, queueTop + 10)
 end
 
@@ -2032,13 +2011,8 @@ function Ledger:drawProcessZone()
         glowAlpha = glowAlpha + 0.1  -- Brighter when holding item
     end
 
-    -- Outer glow rings
-    for i = 3, 1, -1 do
-        local ringRadius = pz.radius + i * 10
-        local ringAlpha = glowAlpha * (4 - i) / 4
-        love.graphics.setColor(0.4, 0.5, 0.6, ringAlpha)
-        love.graphics.circle("fill", pz.x, pz.y, ringRadius)
-    end
+    -- Outer halo
+    theme.glow(pz.x, pz.y, pz.radius + 45, 0.4, 0.5, 0.6, glowAlpha * 1.6)
 
     -- Main zone circle
     local zoneColor = {0.15, 0.17, 0.2}
@@ -2071,9 +2045,10 @@ function Ledger:drawProcessZone()
     end
 
     -- Label
-    love.graphics.setColor(0.4, 0.45, 0.5, 0.5)
+    love.graphics.setColor(0.4, 0.45, 0.5, 0.6)
     local labelText = "PROCESS"
-    local font = love.graphics.getFont()
+    local font = theme.font("uiBold", 11)
+    love.graphics.setFont(font)
     local textWidth = font:getWidth(labelText)
     love.graphics.print(labelText, pz.x - textWidth / 2, pz.y + pz.radius + 10)
 end
@@ -2102,12 +2077,7 @@ function Ledger:drawItems()
         -- Selected items glow
         if item.selected then
             -- Glow
-            for i = 3, 1, -1 do
-                local glowSize = size + i * 5
-                local glowAlpha = 0.1 * (4 - i) / 3
-                love.graphics.setColor(0.6, 0.65, 0.75, glowAlpha)
-                love.graphics.circle("fill", item.x, item.y, glowSize)
-            end
+            theme.glow(item.x, item.y, size + 22, 0.6, 0.65, 0.75, 0.35)
         end
 
         -- Processing animation - spin out effect
@@ -2173,12 +2143,7 @@ function Ledger:drawHeldItem()
     end
 
     -- Strong glow when held
-    for i = 4, 1, -1 do
-        local glowSize = size + i * 8
-        local glowAlpha = 0.15 * (5 - i) / 4
-        love.graphics.setColor(0.7, 0.75, 0.85, glowAlpha)
-        love.graphics.circle("fill", item.x, item.y, glowSize)
-    end
+    theme.glow(item.x, item.y, size + 40, 0.7, 0.75, 0.85, 0.55)
 
     -- Draw organic blob shape
     local segments = 16
@@ -2277,9 +2242,14 @@ function Ledger:drawUI()
     love.graphics.setColor(0.08, 0.085, 0.1, 0.7)
     love.graphics.rectangle("fill", panelX - 20, panelY - 20, panelW + 20, panelH + 20, 8, 8)
 
+    local labelFont = theme.font("uiBold", 11)
+    local numberFont = theme.font("uiBold", 18)
+
     -- === SCORE with spinning/juice effects ===
+    love.graphics.setFont(labelFont)
     love.graphics.setColor(0.8, 0.82, 0.85, 0.9)
     love.graphics.print("SCORE", panelX, panelY)
+    love.graphics.setFont(numberFont)
 
     -- Score juice: scale and shake
     local scoreScale = 1 + fx.scoreJuice * 0.15
@@ -2288,8 +2258,7 @@ function Ledger:drawUI()
 
     -- Score glow when spinning
     if fx.scoreJuice > 0.1 then
-        love.graphics.setColor(1, 0.95, 0.6, fx.scoreJuice * 0.5)
-        love.graphics.print(tostring(math.floor(self.displayScore)), panelX + scoreShakeX - 1, panelY + 20 + scoreShakeY - 1)
+        theme.glow(panelX + 22, panelY + 31, 40, 1, 0.95, 0.6, fx.scoreJuice * 0.6)
     end
 
     -- Main score display (spinning number)
@@ -2315,6 +2284,7 @@ function Ledger:drawUI()
     end
 
     -- === EFFICIENCY BAR with pulse/glow ===
+    love.graphics.setFont(labelFont)
     love.graphics.setColor(0.8, 0.82, 0.85, 0.9)
     love.graphics.print("EFFICIENCY", panelX, panelY + 50)
 
@@ -2324,11 +2294,8 @@ function Ledger:drawUI()
     -- Glow behind efficiency bar when high
     if fx.efficiencyGlow > 0 then
         local glowPulse = 1 + math.sin(fx.efficiencyPulse) * 0.3
-        for i = 3, 1, -1 do
-            local glowAlpha = fx.efficiencyGlow * 0.2 * (4 - i) / 3 * glowPulse
-            love.graphics.setColor(0.3, 0.8, 1, glowAlpha)
-            love.graphics.rectangle("fill", barX - i * 3, barY - i * 2, barW + i * 6, barH + i * 4, 5, 5)
-        end
+        theme.glowEllipse(barX + barW / 2, barY + barH / 2, barW * 0.75, 22, 0,
+            0.3, 0.8, 1, fx.efficiencyGlow * 0.45 * glowPulse)
     end
 
     -- Bar background
@@ -2353,8 +2320,10 @@ function Ledger:drawUI()
     end
 
     -- === STREAK with slam effect ===
+    love.graphics.setFont(labelFont)
     love.graphics.setColor(0.8, 0.82, 0.85, 0.9)
     love.graphics.print("STREAK", panelX, panelY + 95)
+    love.graphics.setFont(numberFont)
 
     local streakX = panelX + fx.streakShake.x
     local streakY = panelY + 115 + fx.streakShake.y
@@ -2363,10 +2332,7 @@ function Ledger:drawUI()
     if fx.streakGlow > 0 or self.streak >= 5 then
         local glowIntensity = math.max(fx.streakGlow, self.streak >= 5 and 0.3 or 0)
         local pulseGlow = glowIntensity * (0.8 + math.sin(time * 6) * 0.2)
-        for i = 3, 1, -1 do
-            love.graphics.setColor(1, 0.8, 0.2, pulseGlow * 0.3 * (4 - i) / 3)
-            love.graphics.circle("fill", streakX + 10, streakY + 8, 15 + i * 5)
-        end
+        theme.glow(streakX + 10, streakY + 11, 36, 1, 0.8, 0.2, pulseGlow * 0.7)
     end
 
     -- Streak number with slam scale
@@ -2401,6 +2367,7 @@ function Ledger:drawUI()
     end
 
     -- Processed count
+    love.graphics.setFont(theme.font("ui", 13))
     love.graphics.setColor(0.5, 0.52, 0.55, 0.7)
     love.graphics.print("Processed: " .. self.processedCount, panelX, panelY + 145)
 
@@ -2411,14 +2378,16 @@ function Ledger:drawUI()
         love.graphics.push()
         love.graphics.translate(popup.x, popup.y)
         love.graphics.scale(popup.scale, popup.scale)
-        local font = love.graphics.getFont()
+        local font = theme.font("uiBold", 16)
+        love.graphics.setFont(font)
         local textW = font:getWidth(popup.text)
         love.graphics.print(popup.text, -textW / 2, 0)
         love.graphics.pop()
     end
 
     -- Controls hint (bottom)
-    love.graphics.setColor(0.4, 0.42, 0.45, 0.5)
+    love.graphics.setFont(theme.font("ui", 14))
+    love.graphics.setColor(0.4, 0.42, 0.45, 0.6)
     local hasGamepad = input.hasGamepad()
     local hint
     if self.heldItem then
@@ -2432,7 +2401,8 @@ end
 function Ledger:drawSystemMessage()
     if self.systemMessageTimer > 0 then
         love.graphics.setColor(0.7, 0.72, 0.75, self.systemMessageAlpha * 0.9)
-        local font = love.graphics.getFont()
+        local font = theme.font("ui", 16)
+        love.graphics.setFont(font)
         local textWidth = font:getWidth(self.systemMessage)
         love.graphics.print(self.systemMessage, (self.screenW - textWidth) / 2, self.screenH - 80)
     end
