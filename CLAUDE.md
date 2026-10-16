@@ -100,7 +100,7 @@ Feelings are drawn as bioluminescent organisms in deep water. Darkness is the ca
 EMILY_SHOT="scene=hold;nocard=1;hold=a@0.5-3;at=2,6;out=C:/tmp/hold.png" lovec .
 ```
 
-Options: `scene` (menu or a microgame id), `keys`, `hold`, `at`, `ending`/`endtext`, `size=WxH`, `perf=1` (frame times). `EMILY_FX=bypass|nomsaa|rgba8` isolates pipeline problems; Shift+F1–F4 toggle bypass, distortion, bloom and grade in game.
+Options: `scene` (menu or a microgame id), `keys`, `hold`, `at`, `ending`/`endtext`, `size=WxH`, `perf=1` (frame times). `record=a-b;dir=...` saves every frame between a and b seconds as numbered PNGs, and `fps=30` steps the clock by exactly 1/fps (alone, it makes probe stills match a recording). `EMILY_DENSITY=2` renders the 960x540 world at twice the pixel density; pair it with `size=1920x1080` for full-resolution stills and films. Inside a draw, reset the transform with `theme.origin()`, never `love.graphics.origin()`, or density captures break. `EMILY_FX=bypass|nomsaa|rgba8` isolates pipeline problems; Shift+F1–F4 toggle bypass, distortion, bloom and grade in game.
 
 ## Libraries
 

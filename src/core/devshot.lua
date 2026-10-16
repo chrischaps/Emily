@@ -14,6 +14,12 @@
 -- endtext text to show on it (use / for a line break)
 -- size   WxH window size, to check letterboxing
 -- perf   1 to turn vsync off and report frame times
+-- record a-b: save every frame between a and b seconds as numbered PNGs in
+--        the directory "dir" (made by the caller), stepping the clock by
+--        exactly 1/fps (default 30) so the footage plays back smoothly
+-- fps    also fixes the clock without recording, so probe stills match the film
+--
+-- Pair with EMILY_DENSITY=2 and size=1920x1080 for full-resolution frames.
 
 local devshot = {}
 
@@ -67,8 +73,17 @@ function devshot.init()
         spec.frames, spec.worst = 0, 0
     end
 
-    for at in (spec.at or "2"):gmatch("[^,]+") do
+    for at in (spec.at or (spec.record and "" or "2")):gmatch("[^,]+") do
         shots[#shots + 1] = tonumber(at)
+    end
+    if spec.record then
+        local a, b = spec.record:match("([%d%.]+)%-([%d%.]+)")
+        spec.recFrom, spec.recTo = tonumber(a), tonumber(b)
+        spec.frame = 0
+    end
+    if spec.record or spec.fps then
+        spec.step = 1 / (tonumber(spec.fps) or 30)
+        love.window.setVSync(0)
     end
 
     -- Let held keys read as pressed through love.keyboard.isDown
@@ -96,9 +111,30 @@ function devshot.start(scene_manager)
     end
 end
 
+--- The frame's dt: fixed while recording, so time runs at the film's rate
+function devshot.dt(dt)
+    if spec and spec.step then return spec.step end
+    return dt
+end
+
 function devshot.update(dt)
     if not spec then return end
     clock = clock + dt
+
+    if spec.recFrom and clock >= spec.recFrom and clock < spec.recTo + spec.step / 2 then
+        spec.frame = spec.frame + 1
+        local out = string.format("%s/%05d.png", spec.dir or ".", spec.frame)
+        love.graphics.captureScreenshot(function(imageData)
+            local f = io.open(out, "wb")
+            if f then
+                f:write(imageData:encode("png"):getString())
+                f:close()
+            end
+        end)
+    elseif spec.recTo and not quitAt and clock >= spec.recTo + spec.step and shotIndex >= #shots then
+        print("[devshot] recorded " .. spec.frame .. " frames")
+        quitAt = clock + 0.3
+    end
 
     if spec.ending and not spec.ended and clock >= tonumber(spec.ending) then
         spec.ended = true
@@ -138,7 +174,7 @@ function devshot.update(dt)
                 print("[devshot] could not write " .. out)
             end
         end)
-        if shotIndex == #shots then
+        if shotIndex == #shots and not spec.recTo then
             quitAt = clock + 0.3
         end
     end

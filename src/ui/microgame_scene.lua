@@ -271,7 +271,7 @@ function microgame_scene:draw()
     love.graphics.clear(a[1], a[2], a[3])
 
     if self.microgame.draw then self.microgame:draw() end
-    love.graphics.origin()
+    theme.origin()
     love.graphics.setBlendMode("alpha")
     love.graphics.setStencilTest()
     love.graphics.setLineWidth(1)

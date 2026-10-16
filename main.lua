@@ -13,7 +13,7 @@ function love.load(...)
 end
 
 function love.update(dt)
-    dt = math.min(dt, 1 / 20)  -- a hitch should never teleport anything
+    dt = math.min(devshot.dt(dt), 1 / 20)  -- a hitch should never teleport anything
     theme.update(dt)
     if game.update then game.update(dt) end
     devshot.update(dt)
@@ -23,7 +23,7 @@ function love.draw()
     -- The scene draws into the light canvas at the virtual resolution...
     theme.beginFrame()
     if game.draw then game.draw() end
-    love.graphics.origin()
+    theme.origin()
 
     -- ...which is graded, bloomed and presented letterboxed.
     local ox, oy = scaling.getOffset()

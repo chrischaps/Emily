@@ -16,6 +16,10 @@ local theme = {}
 
 theme.W, theme.H = 960, 540
 
+-- Pixels per virtual pixel in the light canvas. 1 for play; EMILY_DENSITY=2
+-- renders the same 960x540 world at 1920x1080 for crisp captures.
+theme.density = tonumber(os.getenv("EMILY_DENSITY") or "") or 1
+
 --============================================================================
 -- PALETTE
 --============================================================================
@@ -136,7 +140,7 @@ function theme.font(role, size)
     local key = role .. ":" .. size
     local f = fontCache[key]
     if not f then
-        f = love.graphics.newFont(fontFiles[role] or fontFiles.ui, size)
+        f = love.graphics.newFont(fontFiles[role] or fontFiles.ui, size, "normal", theme.density)
         f:setFilter("linear", "linear")
         fontCache[key] = f
     end
@@ -356,9 +360,10 @@ local BLOOM_KEYS = { "threshold", "intensity" }
 
 --- Set up the post-processing pipeline. Call once from love.load.
 function theme.init()
-    PostFX.init(theme.W, theme.H, {
+    local d = theme.density
+    PostFX.init(theme.W * d, theme.H * d, {
         distortion = { enabled = false, strength = 0, speed = 0.6 },
-        bloom = { enabled = true, radius = 2.2, passes = 3, softness = 0.22 },
+        bloom = { enabled = true, radius = 2.2 * d, passes = 3, softness = 0.22 },
         colorGrade = { enabled = true, highlightTint = { 1.0, 0.985, 0.96 } },
     }, {
         canvasFormat = (os.getenv("EMILY_FX") or ""):find("rgba8") and "rgba8" or "rgba16f",
@@ -441,6 +446,13 @@ end
 --- Begin drawing the scene into the light canvas
 function theme.beginFrame()
     PostFX.beginScene()
+    theme.origin()
+end
+
+--- Reset the transform to virtual coordinates (use instead of love.graphics.origin)
+function theme.origin()
+    love.graphics.origin()
+    love.graphics.scale(theme.density)
 end
 
 --- Finish the scene and present it to the window, letterboxed
@@ -458,7 +470,8 @@ function theme.endFrame(scale, offsetX, offsetY)
     love.graphics.setShader()
     love.graphics.setCanvas()
     love.graphics.clear(0, 0, 0, 1)  -- letterbox bars
-    PostFX.endScene(scale, offsetX, offsetY)
+    love.graphics.origin()
+    PostFX.endScene(scale / theme.density, offsetX, offsetY)
 end
 
 --- Runtime toggles for the pipeline (Shift+F1..F4 in game)
