@@ -41,7 +41,7 @@ LOVE Framework → main.lua → game.lua → scene_manager.lua → Current Scene
 - `game.lua` - Main controller, delegates LOVE callbacks to scene manager
 - `scene_manager.lua` - Scene lifecycle; `switchTo` dissolves through darkness, `setScene` cuts. Calls `unload` on the outgoing scene
 - `theme.lua` - The visual language: palette, per-EML hues, fonts, `glow`/`blob`/`lightOrb`, easing, and the mood that drives post-processing
-- `visual_effects.lua` - Per-game ambient particles, trails and bursts (presets: `burden`, `disorientation`, `intimacy`, `complicity`)
+- `visual_effects.lua` - Per-game ambient particles, trails and bursts (presets: `burden`, `disorientation`, `intimacy`, `absence`, `complicity`)
 - `microgame_base.lua` - Base class template for all microgames
 - `devshot.lua` - Dev-only screenshot harness (see Verifying Visuals)
 
@@ -82,6 +82,7 @@ Feelings are drawn as bioluminescent organisms in deep water. Darkness is the ca
 | Burden | Carry, Weight | `burden`: ember amber |
 | Disorientation | Fog, Fog (Anchors), Fog (Exit) | `disorientation`: sodium-grey cyan |
 | Intimacy | Hold | `intimacy`: rose and peach |
+| Absence | Lantern | `absence`: dusk lavender; `candle` is the warmth that leaves |
 | Complicity | Ledger | `complicity`: clinical mint, souring to yellow |
 | Shell | Menu, settings | `shell`: moonlight |
 

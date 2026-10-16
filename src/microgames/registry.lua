@@ -74,6 +74,18 @@ local microgames = {
         end
     },
     {
+        id = "lantern",
+        name = "Lantern",
+        emlId = "EML-04",
+        emotions = {"loss", "longing", "mourning", "change"},
+        description = "A small light shows you the way. Then it doesn't.",
+        expectedDuration = "3–4 min",
+        create = function()
+            local lantern = require("src.microgames.lantern.init")
+            return lantern.new()
+        end
+    },
+    {
         id = "ledger",
         name = "Ledger",
         emlId = "EML-10",

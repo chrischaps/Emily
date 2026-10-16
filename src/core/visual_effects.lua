@@ -84,6 +84,22 @@ local presets = {
         breatheIntensity = 0.025,
     },
 
+    -- Absence theme (Lantern)
+    absence = {
+        baseColor = base(theme.hues.absence),
+        accentColor = theme.hues.absence.light,
+        warmColor = theme.hues.absence.candle,
+        ambientParticles = true,
+        ambientDirection = "up",    -- Slow motes rising, like breath let go
+        ambientSpeed = 4,
+        ambientAlpha = 0.07,
+        trailParticles = true,
+        connectionParticles = false,
+        vignetteRange = { 0.2, 0.55 },  -- Closes in as the light goes
+        breatheEnabled = true,
+        breatheIntensity = 0.012,
+    },
+
     -- Complicity theme (Ledger)
     complicity = {
         baseColor = base(theme.hues.complicity),

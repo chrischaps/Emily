@@ -106,6 +106,11 @@ Reflection, longing, quiet emotional impact.
 - Audio/visual reduction  
 - Leaving “ghost affordances” where mechanics used to be  
 
+**Pitfalls:**  
+The loss must never read as the player's failure. No fail state, nothing to fix; let the player feel it rather than solve it.
+
+**Implemented by:** Lantern (`src/microgames/lantern`, see `lantern_eml04_design.md`)  
+
 ---
 
 ## EML-05: Mechanics of Intimacy

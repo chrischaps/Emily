@@ -28,6 +28,7 @@ local families = {
     burden         = { x = 170, y = 400, spread = 70, angle = 0.3 },   -- low, heavy
     disorientation = { x = 300, y = 205, spread = 85, angle = 2.4 },   -- adrift
     intimacy       = { x = 470, y = 370, spread = 0,  angle = 0 },
+    absence        = { x = 330, y = 330, spread = 0,  angle = 0 },
     complicity     = { x = 520, y = 190, spread = 0,  angle = 0 },
     shell          = { x = 560, y = 480, spread = 0,  angle = 0 },
 }
@@ -36,6 +37,7 @@ local moodNames = {
     burden = "Burden",
     disorientation = "Disorientation",
     intimacy = "Intimacy",
+    absence = "Absence",
     complicity = "Complicity",
 }
 
@@ -316,6 +318,32 @@ function creatureBodies.intimacy(item, hue, r, glow, t)
     theme.glow(item.x, item.y, r * 5, hue.light[1], hue.light[2], hue.light[3], 0.2 * glow)
     theme.lightOrb(x1, y1, r * 0.72, hue, glow, t)
     theme.lightOrb(x2, y2, r * 0.6, theme.hues.shell, glow * 0.9, t + 2)
+end
+
+function creatureBodies.absence(item, hue, r, glow, t)
+    -- A small warm light drifts away from it, dims to nothing, and leaves
+    -- the shape of where it was. Then, slowly, it is remembered back.
+    local cycle = (t * 0.09) % 1
+    local away = theme.smoothstep(0.15, 0.6, cycle)
+    local life = 1 - theme.smoothstep(0.35, 0.65, cycle)
+    local back = theme.smoothstep(0.85, 1.0, cycle)
+    life = math.max(life, back)
+    local a = t * 0.35 + item.phase
+    local d = r * (1.5 + 1.8 * away * (1 - back))
+    local cx, cy = item.x + math.cos(a) * d, item.y + math.sin(a) * d * 0.7
+    local c = hue.candle
+    theme.glow(item.x, item.y, r * 5, hue.light[1], hue.light[2], hue.light[3], 0.16 * glow)
+    if life > 0.01 then
+        theme.lightOrb(cx, cy, r * 0.45, { light = c, core = { 1, 0.95, 0.85 } }, glow * life, t)
+    end
+    -- The outline of the missing light
+    local ghost = (1 - life) * 0.45 * glow
+    if ghost > 0.01 then
+        love.graphics.setLineWidth(1)
+        love.graphics.setColor(c[1], c[2], c[3], ghost)
+        love.graphics.circle("line", cx, cy, r * 0.55, 32)
+    end
+    theme.lightOrb(item.x, item.y, r, hue, glow, t)
 end
 
 function creatureBodies.complicity(item, hue, r, glow, t)

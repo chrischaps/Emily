@@ -52,6 +52,12 @@ theme.hues = {
         core  = { 1.00, 0.90, 0.84 },  -- peach
         deep  = { 0.10, 0.05, 0.08 },
     },
+    absence = {
+        light = { 0.76, 0.72, 0.96 },  -- dusk lavender, the colour left behind
+        core  = { 0.96, 0.93, 1.00 },
+        deep  = { 0.06, 0.05, 0.10 },
+        candle = { 1.00, 0.76, 0.44 }, -- what used to be here
+    },
     complicity = {
         light = { 0.55, 1.00, 0.80 },  -- clinical mint
         core  = { 0.90, 1.00, 0.96 },
@@ -68,6 +74,7 @@ theme.hues = {
 local emlMoods = {
     ["EML-01"] = "burden",
     ["EML-02"] = "disorientation",
+    ["EML-04"] = "absence",
     ["EML-05"] = "intimacy",
     ["EML-10"] = "complicity",
 }
@@ -338,6 +345,12 @@ local moods = {
         colorGrade = { saturation = 0.12, contrast = 0.04, warmth = 0.015,
                        vignetteStrength = 0.50, vignetteRadius = 0.62,
                        shadowTint = { 0.10, 0.05, 0.10 } },
+    },
+    absence = {
+        bloom = { threshold = 0.36, intensity = 0.85 },
+        colorGrade = { saturation = -0.06, contrast = 0.03, warmth = 0.0,
+                       vignetteStrength = 0.55, vignetteRadius = 0.60,
+                       shadowTint = { 0.07, 0.05, 0.13 } },
     },
     complicity = {
         bloom = { threshold = 0.50, intensity = 0.55 },

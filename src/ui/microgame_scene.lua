@@ -120,7 +120,7 @@ function microgame_scene:update(dt)
     end
 
     if self.phase == "ending" then
-        if self.phaseTime >= END_RISE + END_LINGER then
+        if self.phaseTime >= END_RISE + self:endLinger() then
             self:leave()
         end
         return
@@ -171,9 +171,14 @@ function microgame_scene:beginEnding()
     end
     -- With nothing to say, the ending is only a breath long
     if #self.endingLines == 0 then
-        self.phaseTime = END_RISE + END_LINGER - 1.2
+        self.phaseTime = END_RISE + self:endLinger() - 1.2
     end
     theme.setVignette(0)
+end
+
+-- Longer endings stay long enough for their last line to be read
+function microgame_scene:endLinger()
+    return END_LINGER + math.max(0, #(self.endingLines or {}) - 2) * 1.2
 end
 
 function microgame_scene:leave()
@@ -347,7 +352,7 @@ end
 function microgame_scene:drawEnding()
     local hue = self.hue or theme.hues.shell
     local t = self.phaseTime - END_RISE
-    local fadeOut = 1 - theme.clamp((t - (END_LINGER - 0.9)) / 0.9)
+    local fadeOut = 1 - theme.clamp((t - (self:endLinger() - 0.9)) / 0.9)
     local cx, cy = theme.W / 2, theme.H / 2
 
     -- A last ember of the game's light
